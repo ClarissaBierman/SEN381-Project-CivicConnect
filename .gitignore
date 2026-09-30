@@ -1,0 +1,15 @@
+# Backend build output
+civicconnect-backend/target/
+
+# IDE files
+.idea/
+*.iml
+out/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Frontend (once Angular is added)
+node_modules/
+dist/
