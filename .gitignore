@@ -1,15 +1,20 @@
 # Backend build output
 civicconnect-backend/target/
 
+# Backend local config (contains real DB password - each dev has their own copy)
+civicconnect-backend/src/main/resources/application.properties
+
+# Frontend
+civicconnect-frontend/node_modules/
+civicconnect-frontend/dist/
+civicconnect-frontend/.angular/
+
 # IDE files
 .idea/
 *.iml
 out/
+.vscode/
 
 # OS files
 .DS_Store
 Thumbs.db
-
-# Frontend (once Angular is added)
-node_modules/
-dist/

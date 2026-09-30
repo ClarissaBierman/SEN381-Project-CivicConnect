@@ -1,0 +1,7 @@
+<h1>CivicConnect Categories</h1>
+
+<ul>
+  <li *ngFor="let category of categories()">
+    {{ category.catName }} — {{ category.active ? 'Active' : 'Inactive' }}
+  </li>
+</ul>
