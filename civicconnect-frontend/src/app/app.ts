@@ -1,25 +1,45 @@
-import { Component, OnInit, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { RouterOutlet } from '@angular/router';
-import { CategoryService } from './category.service';
-import { Category } from './category';
+import { Component, computed, inject } from '@angular/core';
+import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { Role } from './core/models';
+import { SessionService } from './core/session.service';
+
+interface NavLink {
+  path: string;
+  label: string;
+}
+
+// Screen map, PED Section 22.1: one Angular app, the menu only shows the current role's screens.
+const NAV: Record<Role, NavLink[]> = {
+  REQUESTER: [
+    { path: '/requests/mine', label: 'My Requests' },
+    { path: '/requests/new', label: 'New Request' },
+  ],
+  HANDLER: [{ path: '/staff/requests', label: 'Requests' }],
+  MANAGER: [
+    { path: '/management/activity', label: 'Activity' },
+    { path: '/management/requests', label: 'Requests' },
+    { path: '/management/categories', label: 'Categories' },
+    { path: '/management/handler-categories', label: 'Handler categories' },
+  ],
+};
 
 @Component({
   selector: 'app-root',
-  standalone: true,
-  imports: [CommonModule, RouterOutlet],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive],
   templateUrl: './app.html',
-  styleUrl: './app.css'
+  styleUrl: './app.css',
 })
-export class App implements OnInit {
-  categories = signal<Category[]>([]);
+export class App {
+  protected readonly session = inject(SessionService);
+  private readonly router = inject(Router);
 
-  constructor(private categoryService: CategoryService) {}
+  protected readonly links = computed(() => {
+    const user = this.session.user();
+    return user ? NAV[user.role] : [];
+  });
 
-  ngOnInit(): void {
-    this.categoryService.getAll().subscribe({
-      next: (data) => this.categories.set(data),
-      error: (err) => console.error('Failed to load categories', err)
-    });
+  logout(): void {
+    this.session.signOut();
+    this.router.navigateByUrl('/login');
   }
 }

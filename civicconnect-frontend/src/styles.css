@@ -1,1 +1,157 @@
-/* You can add global styles to this file, and also import other style files */
+/* Low-fidelity look matching the PED Section 22 wireframes. Final visual styling is deferred (M2 brief, Section 11). */
+
+:root {
+  --text: #1f1f1f;
+  --muted: #555;
+  --line: #333;
+  --line-soft: #bbb;
+  --surface: #fff;
+  --surface-2: #f2f2f2;
+  --row-alt: #f7f7f7;
+  --error: #b3261e;
+  --focus: #1d4ed8;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  color: var(--text);
+}
+
+* { box-sizing: border-box; }
+
+body { margin: 0; background: var(--surface); }
+
+h1 { font-size: 1.35rem; margin: 0 0 0.75rem; }
+h2 { font-size: 1.2rem; margin: 1rem 0 0.5rem; }
+h3 { font-size: 1rem; margin: 1rem 0 0.4rem; }
+
+.panel {
+  border: 2px solid var(--line);
+  border-radius: 4px;
+  padding: 1rem 1.25rem;
+  background: var(--surface);
+  min-width: 0;
+}
+
+.panel.narrow { max-width: 420px; margin: 3rem auto; }
+
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+.two-col.wide-left { grid-template-columns: 3fr 2fr; margin-top: 1.25rem; }
+
+/* Responsive web: panels stack on narrow screens (PED 22.3) */
+@media (max-width: 900px) {
+  .two-col, .two-col.wide-left { grid-template-columns: 1fr; }
+}
+
+.field { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.9rem; }
+label { font-weight: 600; }
+.filters label, .inline-row label { font-weight: 400; }
+
+input, select, textarea {
+  font: inherit;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--text);
+  max-width: 100%;
+}
+textarea { resize: vertical; }
+.invalid { border-color: var(--error); outline: 1px solid var(--error); }
+
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+.hint { color: var(--muted); font-size: 0.85rem; }
+.error { color: var(--error); font-size: 0.85rem; }
+
+.error-box {
+  border: 2px dashed var(--error);
+  color: var(--error);
+  padding: 0.6rem 0.8rem;
+  margin: 0.75rem 0;
+}
+.confirm-box {
+  border: 2px dashed var(--line);
+  padding: 0.6rem 0.8rem;
+  margin: 0 0 0.75rem;
+}
+
+.btn {
+  font: inherit;
+  font-weight: 600;
+  padding: 0.45rem 1rem;
+  border: 2px solid var(--line);
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+.btn.primary, .btn:hover:not(:disabled) { background: #ddd; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.link-btn {
+  font: inherit;
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  padding: 0 0.25rem;
+}
+.link-btn:disabled { opacity: 0.4; cursor: default; }
+
+.actions, .inline-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin: 0.5rem 0; }
+.stack { display: flex; flex-direction: column; gap: 0.6rem; }
+
+table { width: 100%; border-collapse: collapse; margin: 0.5rem 0; }
+th, td { border: 1px solid var(--line); padding: 0.4rem 0.55rem; text-align: left; }
+th { background: #e6e6e6; }
+tbody tr:nth-child(even) { background: var(--row-alt); }
+tr.clickable { cursor: pointer; }
+tr.clickable:hover, tr.selected { background: #e2e2e2; }
+
+.badge {
+  display: inline-block;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0 0.6rem;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.timeline { list-style: none; margin: 0; padding-left: 0.75rem; border-left: 3px solid var(--line-soft); }
+.timeline li { margin: 0.25rem 0; }
+
+.filters { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; margin-bottom: 0.75rem; }
+.filters.wide h1 { margin: 0 1rem 0 0; }
+.push-right { margin-left: auto; }
+
+.pager { display: flex; align-items: center; gap: 0.4rem; }
+
+.description { background: var(--surface-2); padding: 0.6rem; white-space: pre-wrap; }
+
+.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-top: 1rem; }
+.tile {
+  border: 2px solid var(--line);
+  border-radius: 4px;
+  padding: 1rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.tile.strong { border-width: 3px; }
+.tile .big { font-size: 2.2rem; font-weight: 700; }
+@media (max-width: 700px) {
+  .tiles { grid-template-columns: repeat(2, 1fr); }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
