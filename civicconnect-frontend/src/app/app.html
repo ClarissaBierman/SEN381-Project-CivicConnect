@@ -1,7 +1,16 @@
-<h1>CivicConnect Categories</h1>
+@if (session.user(); as user) {
+  <header class="topbar">
+    <span class="brand">CivicConnect</span>
+    <nav aria-label="Main">
+      @for (link of links(); track link.path) {
+        <a [routerLink]="link.path" routerLinkActive="active">{{ link.label }}</a>
+      }
+    </nav>
+    <span class="role-pill">{{ user.badge }}</span>
+    <button type="button" class="link-btn" (click)="logout()">Log out</button>
+  </header>
+}
 
-<ul>
-  <li *ngFor="let category of categories()">
-    {{ category.catName }} — {{ category.active ? 'Active' : 'Inactive' }}
-  </li>
-</ul>
+<main class="page">
+  <router-outlet />
+</main>

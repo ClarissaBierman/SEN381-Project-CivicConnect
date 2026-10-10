@@ -1,0 +1,101 @@
+<div class="two-col">
+  <!-- Left panel: New service request (FR-001, API-04) -->
+  <section class="panel" aria-labelledby="new-request-title">
+    @if (confirmation(); as c) {
+      <!-- Marker 7: confirmation with reference number, status and timestamp -->
+      <p class="confirm-box" role="status">
+        ✓ Request {{ c.refNum }} submitted - status: New ({{ c.createdAt | date: 'dd/MM/yyyy HH:mm' }})
+      </p>
+    }
+
+    <h1 id="new-request-title">New service request</h1>
+
+    @if (formError()) {
+      <p class="error-box" role="alert">{{ formError() }}</p>
+    }
+
+    <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+      <div class="field">
+        <label for="categoryId">Category *</label>
+        <select id="categoryId" formControlName="categoryId" [class.invalid]="errorFor('categoryId')"
+                (change)="clearServerError('categoryId')">
+          <option [ngValue]="null" disabled>Select a category</option>
+          @for (c of categories(); track c.catId) {
+            <option [ngValue]="c.catId">{{ c.catName }}</option>
+          }
+        </select>
+        <small class="hint">Chosen from the list maintained by Management - no free text</small>
+        @if (errorFor('categoryId'); as e) { <small class="error">{{ e }}</small> }
+      </div>
+
+      <div class="field">
+        <label for="description">Description *</label>
+        <textarea id="description" rows="5" formControlName="description" placeholder="Describe the problem ..."
+                  [class.invalid]="errorFor('description')" (input)="clearServerError('description')"></textarea>
+        <small class="hint">Max 2000 characters ({{ form.controls.description.value.length }}/2000)</small>
+        @if (errorFor('description'); as e) { <small class="error">{{ e }}</small> }
+      </div>
+
+      <div class="field">
+        <label for="location">Location *</label>
+        <input id="location" type="text" formControlName="location"
+               [class.invalid]="errorFor('location')" (input)="clearServerError('location')" />
+        @if (errorFor('location'); as e) { <small class="error">{{ e }}</small> }
+      </div>
+
+      <div class="field">
+        <label for="attachmentUrl">Attachment link (optional)</label>
+        <input id="attachmentUrl" type="url" formControlName="attachmentUrl" placeholder="https://..."
+               [class.invalid]="errorFor('attachmentUrl')" />
+        <small class="hint">Only a link is stored (file upload is deferred)</small>
+        @if (errorFor('attachmentUrl'); as e) { <small class="error">{{ e }}</small> }
+      </div>
+
+      <div class="actions">
+        <button type="submit" class="btn primary" [disabled]="saving()">
+          {{ saving() ? 'Submitting...' : 'Submit request' }}
+        </button>
+        <button type="button" class="btn" (click)="cancel()">Cancel</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- Right panel: My requests (FR-003, API-05) + detail (FR-002/FR-004, API-06) -->
+  <section class="panel" aria-labelledby="my-requests-title">
+    <h2 id="my-requests-title">My requests</h2>
+    <table>
+      <thead>
+        <tr><th>Ref</th><th>Category</th><th>Status</th><th>Updated</th></tr>
+      </thead>
+      <tbody>
+        @for (r of myRequests(); track r.id) {
+          <tr class="clickable" [class.selected]="selected()?.id === r.id" tabindex="0"
+              (click)="select(r.id)" (keydown.enter)="select(r.id)">
+            <td>{{ r.refNum }}</td>
+            <td>{{ r.categoryName }}</td>
+            <td><app-status-badge [status]="r.status" /></td>
+            <td>{{ r.updatedAt | date: 'dd/MM' }}</td>
+          </tr>
+        } @empty {
+          <tr><td colspan="4" class="hint">You have not submitted any requests yet.</td></tr>
+        }
+      </tbody>
+    </table>
+    <small class="hint">Own requests only, newest first</small>
+
+    @if (selected(); as d) {
+      <h2>{{ d.refNum }}</h2>
+      <!-- Marker 6: status shown on next view, no push notifications (CR-005) -->
+      <p>
+        Status: <app-status-badge [status]="d.status" />
+        &nbsp; Last updated {{ d.updatedAt | date: 'dd/MM HH:mm' }}
+      </p>
+      <h3>Updates from CivicConnect</h3>
+      <ul class="timeline">
+        @for (u of d.updates; track u.at) {
+          <li><strong>{{ u.at | date: 'dd/MM HH:mm' }}</strong> {{ u.text }}</li>
+        }
+      </ul>
+    }
+  </section>
+</div>
