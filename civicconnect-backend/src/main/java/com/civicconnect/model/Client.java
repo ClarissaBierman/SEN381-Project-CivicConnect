@@ -22,17 +22,25 @@ public class Client {
     @Column(name = "email", nullable = false, unique = true, length = 255)
     private String email;
 
+    // Stores a BCrypt hash, never the plain password (NFR-002)
     @Column(name = "password", nullable = false, length = 255)
     private String password;
 
-    @Column(name = "created_at", nullable = false, updatable = false)
+    @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    @Column(name = "updated_at", nullable = true)
+    private LocalDateTime updatedAt = LocalDateTime.now();
 
     @Column(name = "date_of_birth")
     private LocalDate dateOfBirth;
 
     @Column(name = "phone", length = 30)
     private String phone;
+
+    // Accounts are deactivated, never deleted, so audit history stays valid
+    @Column(name = "active", nullable = false)
+    private boolean active = true;
 
     public Client() {}
 
@@ -54,9 +62,15 @@ public class Client {
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+
     public LocalDate getDateOfBirth() { return dateOfBirth; }
     public void setDateOfBirth(LocalDate dateOfBirth) { this.dateOfBirth = dateOfBirth; }
 
     public String getPhone() { return phone; }
     public void setPhone(String phone) { this.phone = phone; }
+
+    public boolean isActive() { return active; }
+    public void setActive(boolean active) { this.active = active; }
 }

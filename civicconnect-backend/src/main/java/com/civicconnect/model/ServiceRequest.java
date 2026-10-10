@@ -24,7 +24,7 @@ public class ServiceRequest {
     @Column(name = "description", nullable = false)
     private String description;
 
-    @Column(name = "location", length = 255)
+    @Column(name = "location", nullable = false, length = 255)
     private String location;
 
     @Column(name = "attachment_url", length = 500)

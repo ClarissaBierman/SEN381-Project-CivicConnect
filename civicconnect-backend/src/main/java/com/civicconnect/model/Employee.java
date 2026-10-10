@@ -24,6 +24,7 @@ public class Employee {
     @Column(name = "email", nullable = false, unique = true, length = 255)
     private String email;
 
+    // Stores a BCrypt hash, never the plain password (NFR-002)
     @Column(name = "password", nullable = false, length = 255)
     private String password;
 
@@ -51,6 +52,10 @@ public class Employee {
 
     @Column(name = "phone", length = 30)
     private String phone;
+
+    // Employees are deactivated when they leave, never deleted
+    @Column(name = "active", nullable = false)
+    private boolean active = true;
 
     public Employee() {}
 
@@ -92,4 +97,7 @@ public class Employee {
 
     public String getPhone() { return phone; }
     public void setPhone(String phone) { this.phone = phone; }
+
+    public boolean isActive() { return active; }
+    public void setActive(boolean active) { this.active = active; }
 }
