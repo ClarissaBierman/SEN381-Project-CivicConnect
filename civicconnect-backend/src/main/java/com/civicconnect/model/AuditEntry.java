@@ -3,49 +3,120 @@ package com.civicconnect.model;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
+/**
+ * One row-level change written by the audit trigger in the database (DEC-007).
+ * The application only reads this table - it never inserts, updates or deletes audit rows.
+ */
 @Entity
 @Table(name = "audit_entry")
 public class AuditEntry {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "com_id")
-    private Long comId;
+    @Column(name = "aud_id")
+    private Long audId;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "req_id", nullable = false)
-    private ServiceRequest request;
+    @Column(name = "table_name", nullable = false, length = 50)
+    private String table;
 
-    @Column(name = "entry_type", nullable = false, length = 50)
-    private String entryType;
+    @Column(name = "operation", nullable = false, length = 15)
+    private String operation;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "emp_id", nullable = false)
-    private Employee employee;
+    @Column(name = "record_id", nullable = false, length = 20)
+    private String recId;
 
-    @Column(name = "content", columnDefinition = "TEXT")
-    private String content;
+    // Null for INSERT (there was no old row)
+    @Column(name = "old_data")
+    private String oldData;
 
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt = LocalDateTime.now();
+    // Null for DELETE (there is no new row)
+    @Column(name = "new_data")
+    private String newData;
 
-    public AuditEntry() {}
+    // Exactly one of employee / client is the actor; both are null for system changes (A1)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "emp_id")
+    private Employee empId;
 
-    public Long getComId() { return comId; }
-    public void setComId(Long comId) { this.comId = comId; }
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "client_id")
+    private Client clientId;
 
-    public ServiceRequest getRequest() { return request; }
-    public void setRequest(ServiceRequest request) { this.request = request; }
+    @Column(name = "changed_at", nullable = false, updatable = false)
+    private LocalDateTime changedAt = LocalDateTime.now();
 
-    public String getEntryType() { return entryType; }
-    public void setEntryType(String entryType) { this.entryType = entryType; }
+    public AuditEntry() {
+    }
 
-    public Employee getEmployee() { return employee; }
-    public void setEmployee(Employee employee) { this.employee = employee; }
+    public Long getAudId() {
+        return audId;
+    }
 
-    public String getContent() { return content; }
-    public void setContent(String content) { this.content = content; }
+    public void setAudId(Long audId) {
+        this.audId = audId;
+    }
 
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public String getTable() {
+        return table;
+    }
+
+    public void setTable(String table) {
+        this.table = table;
+    }
+
+    public String getRecId() {
+        return recId;
+    }
+
+    public void setRecId(String recId) {
+        this.recId = recId;
+    }
+
+    public String getOperation() {
+        return operation;
+    }
+
+    public void setOperation(String operation) {
+        this.operation = operation;
+    }
+
+    public String getOldData() {
+        return oldData;
+    }
+
+    public void setOldData(String oldData) {
+        this.oldData = oldData;
+    }
+
+    public String getNewData() {
+        return newData;
+    }
+
+    public void setNewData(String newData) {
+        this.newData = newData;
+    }
+
+    public Employee getEmpId() {
+        return empId;
+    }
+
+    public void setEmpId(Employee empId) {
+        this.empId = empId;
+    }
+
+    public Client getClientId() {
+        return clientId;
+    }
+
+    public void setClientId(Client clientId) {
+        this.clientId = clientId;
+    }
+
+    public LocalDateTime getChangedAt() {
+        return changedAt;
+    }
+
+    public void setChangedAt(LocalDateTime changedAt) {
+        this.changedAt = changedAt;
+    }
 }
