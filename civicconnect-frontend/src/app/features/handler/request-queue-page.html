@@ -1,0 +1,171 @@
+<div class="two-col">
+  <!-- Left panel: queue -->
+  <section class="panel" aria-labelledby="queue-title">
+    <h1 id="queue-title">{{ isManager() ? 'All requests' : 'Requests in my categories' }}</h1>
+
+    <form class="filters" [formGroup]="filters" aria-label="Filter requests">
+      <label>
+        <span class="sr-only">Status</span>
+        <select formControlName="status">
+          <option value="">Status: All</option>
+          @for (s of statuses; track s) {
+            <option [value]="s">{{ statusLabels[s] }}</option>
+          }
+        </select>
+      </label>
+      <label>
+        <span class="sr-only">Category</span>
+        <select formControlName="categoryId">
+          <option [ngValue]="0">Category: {{ isManager() ? 'All' : 'Mine' }}</option>
+          @for (c of categories(); track c.catId) {
+            <option [ngValue]="c.catId">{{ c.catName }}</option>
+          }
+        </select>
+      </label>
+      <label>From <input type="date" formControlName="from" /></label>
+      <label>To <input type="date" formControlName="to" /></label>
+      <label>
+        <span class="sr-only">Sort</span>
+        <select formControlName="sort">
+          <option value="createdAt,desc">Sort: Newest</option>
+          <option value="createdAt,asc">Sort: Oldest</option>
+        </select>
+      </label>
+    </form>
+
+    <table>
+      <thead>
+        <tr><th>Ref</th><th>Category</th><th>Status</th><th>Priority</th><th>Created</th><th>Handler</th></tr>
+      </thead>
+      <tbody>
+        @for (r of result()?.content ?? []; track r.id) {
+          <tr class="clickable" [class.selected]="detail()?.id === r.id" tabindex="0"
+              (click)="open(r.id)" (keydown.enter)="open(r.id)">
+            <td>{{ r.refNum }}</td>
+            <td>{{ r.categoryName }}</td>
+            <td><app-status-badge [status]="r.status" /></td>
+            <td>{{ r.priority ? priorityLabels[r.priority] : '-' }}</td>
+            <td>{{ r.createdAt | date: 'dd/MM' }}</td>
+            <td [class.hint]="!r.handlerName">
+              {{ r.handlerId === session.user()?.employeeId ? 'Me' : (r.handlerName ?? 'Unassigned') }}
+            </td>
+          </tr>
+        } @empty {
+          <tr><td colspan="6" class="hint">No requests match these filters.</td></tr>
+        }
+      </tbody>
+    </table>
+
+    @if (result(); as page) {
+      <div class="pager">
+        <button type="button" class="link-btn" [disabled]="page.page === 0" (click)="goToPage(-1)" aria-label="Previous page">◀</button>
+        Page {{ page.page + 1 }} of {{ page.totalPages }}
+        <button type="button" class="link-btn" [disabled]="page.page + 1 >= page.totalPages" (click)="goToPage(1)" aria-label="Next page">▶</button>
+        <span class="hint">({{ page.size }} per page)</span>
+      </div>
+    }
+  </section>
+
+  <!-- Right panel: request detail -->
+  <section class="panel" aria-live="polite">
+    @if (detail(); as d) {
+      <h2>{{ d.refNum }} - {{ d.categoryName }}</h2>
+      <!-- Marker 4: requester by number only; priority visible but only Management changes it (FR-016) -->
+      <p>
+        Requester #{{ d.requesterNumber }} | Location: {{ d.location }} |
+        Priority: {{ d.priority ? priorityLabels[d.priority] : 'Not set' }}
+      </p>
+      <p class="description">{{ d.description }}</p>
+      @if (d.attachmentUrl) {
+        <p><a [href]="d.attachmentUrl" target="_blank" rel="noopener noreferrer">Attachment link</a></p>
+      }
+
+      @if (detailError()) {
+        <!-- Marker 6: error-model message, e.g. 409 VERSION_CONFLICT -->
+        <p class="error-box" role="alert">
+          {{ detailError() }}
+          <button type="button" class="link-btn" (click)="refresh()">Refresh</button>
+        </p>
+      }
+
+      @if (isReadOnly()) {
+        <p class="hint">Status: <app-status-badge [status]="d.status" /> - this request is read-only (FR-011).</p>
+      } @else {
+        <div class="inline-row">
+          <span>Status: <app-status-badge [status]="d.status" /></span>
+          @if (d.allowedTransitions.length) {
+            <label for="toStatus">Change to:</label>
+            <select id="toStatus" [(ngModel)]="toStatus">
+              @for (s of d.allowedTransitions; track s) {
+                <option [ngValue]="s">{{ statusLabels[s] }}</option>
+              }
+            </select>
+            <button type="button" class="btn" [disabled]="busy()" (click)="updateStatus()">Update</button>
+          }
+        </div>
+        <small class="hint">
+          @if (d.allowedTransitions.length) {
+            Only allowed next statuses are listed ({{ labelsFor(d.allowedTransitions) }})
+          } @else if (d.status === 'NEW') {
+            Accept the request before changing its status.
+          }
+        </small>
+
+        <div class="field">
+          <label for="note">Add comment / resolution note</label>
+          <textarea id="note" rows="3" [(ngModel)]="note" placeholder="Type a note ..."></textarea>
+          <div class="inline-row">
+            <button type="button" class="btn" [disabled]="busy() || !note.trim()" (click)="addNote()">Add note</button>
+            <small class="hint">Notes cannot be edited or deleted</small>
+          </div>
+        </div>
+      }
+
+      @if (d.comments.length) {
+        <h3>Notes</h3>
+        <ul class="timeline">
+          @for (c of d.comments; track c.at) {
+            <li><strong>{{ c.at | date: 'dd/MM HH:mm' }}</strong> {{ c.author }}: {{ c.content }}</li>
+          }
+        </ul>
+      }
+
+      <!-- Marker 8: FR-007 / NFR-006 / API-11 - actor, time and before/after status -->
+      <h3>Audit history</h3>
+      <ul class="timeline">
+        @for (a of audit(); track $index) {
+          <li>
+            <strong>{{ a.at | date: 'dd/MM HH:mm' }}</strong> {{ a.actor }} - {{ a.action }}
+            @if (a.fromStatus && a.toStatus) {
+              ({{ statusLabels[a.fromStatus] }} → {{ statusLabels[a.toStatus] }})
+            }
+          </li>
+        }
+      </ul>
+
+      @if (d.handlerId === null && !isReadOnly()) {
+        <!-- Marker 9: accept (handler) / assign (manager) -->
+        <div class="inline-row">
+          @if (isManager()) {
+            <label for="assignTo">Assign to:</label>
+            <select id="assignTo" [(ngModel)]="assignTo">
+              <option [ngValue]="null" disabled>Choose handler</option>
+              @for (h of handlers(); track h.id) {
+                <option [ngValue]="h.id">{{ h.name }}</option>
+              }
+            </select>
+            <button type="button" class="btn" [disabled]="busy() || assignTo === null" (click)="accept()">Assign</button>
+          } @else {
+            <button type="button" class="btn" [disabled]="busy()" (click)="accept()">Accept request</button>
+            <small class="hint">(shown on unassigned requests)</small>
+          }
+        </div>
+      }
+    } @else {
+      <p class="hint">Select a request to see its details.</p>
+      @if (detailError()) {
+        <p class="error-box" role="alert">{{ detailError() }}</p>
+      }
+    }
+  </section>
+</div>
