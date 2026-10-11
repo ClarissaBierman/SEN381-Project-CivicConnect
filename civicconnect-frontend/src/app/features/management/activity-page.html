@@ -1,0 +1,110 @@
+<form class="filters wide" [formGroup]="filters" (ngSubmit)="apply()" aria-label="Activity filters">
+  <h1>Service activity</h1>
+  <label>From <input type="date" formControlName="from" /></label>
+  <label>To <input type="date" formControlName="to" /></label>
+  <label>
+    <span class="sr-only">Category</span>
+    <select formControlName="categoryId">
+      <option [ngValue]="0">Category: All</option>
+      @for (c of categories(); track c.catId) {
+        <option [ngValue]="c.catId">{{ c.catName }}</option>
+      }
+    </select>
+  </label>
+  <label>
+    <span class="sr-only">Status</span>
+    <select formControlName="status">
+      <option value="">Status: All</option>
+      @for (s of statuses; track s) {
+        <option [value]="s">{{ statusLabels[s] }}</option>
+      }
+    </select>
+  </label>
+  <button type="submit" class="btn">Apply</button>
+  <span class="hint push-right">
+    @if (lastRefreshed()) { Last refreshed {{ lastRefreshed() | date: 'dd/MM HH:mm' }} }
+    <button type="button" class="link-btn" (click)="apply()" aria-label="Refresh">↻</button>
+  </span>
+</form>
+
+@if (reportError()) {
+  <p class="error-box" role="alert">{{ reportError() }}</p>
+}
+
+@if (report(); as r) {
+  <div class="tiles">
+    <div class="tile"><span class="big">{{ r.open }}</span>Open</div>
+    <!-- Marker 3: FR-012 (CR-004) overdue = not Resolved, Closed or Rejected within 7 calendar days -->
+    <div class="tile strong"><span class="big">{{ r.overdue }}</span>Overdue<small class="hint">Not resolved within 7 days</small></div>
+    <div class="tile"><span class="big">{{ r.resolved }}</span>Resolved</div>
+    <div class="tile"><span class="big">{{ r.closed }}</span>Closed</div>
+  </div>
+}
+
+<div class="two-col wide-left">
+  <!-- Marker 4: ASR-005 / R-03 - aggregate counts only -->
+  <section class="panel">
+    <h2>By category</h2>
+    <table>
+      <thead>
+        <tr><th>Category</th><th>Open</th><th>Overdue</th><th>Resolved</th><th>Closed</th></tr>
+      </thead>
+      <tbody>
+        @for (row of report()?.byCategory ?? []; track row.categoryId) {
+          <tr>
+            <td>{{ row.categoryName }}</td>
+            <td>{{ row.open }}</td>
+            <td>{{ row.overdue }}</td>
+            <td>{{ row.resolved }}</td>
+            <td>{{ row.closed }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+    <small class="hint">Counts only - no names or contact details (ASR-005, POPIA)</small>
+  </section>
+
+  <!-- Marker 5: FR-016 (CR-003) priority + API-08 assign any handler -->
+  <section class="panel">
+    <h2>Request priority</h2>
+    <div class="field">
+      <label for="req">Request</label>
+      <select id="req" [ngModel]="selectedId" (ngModelChange)="selectRequest($event)">
+        <option [ngValue]="null">Choose an open request</option>
+        @for (o of openRequests(); track o.id) {
+          <option [ngValue]="o.id">{{ o.refNum }} - {{ o.categoryName }} ({{ statusLabels[o.status] }})</option>
+        }
+      </select>
+    </div>
+
+    @if (selected(); as d) {
+      <p>{{ d.refNum }} - {{ d.categoryName }} - <app-status-badge [status]="d.status" /></p>
+      <div class="field">
+        <label for="priority">Priority</label>
+        <select id="priority" [(ngModel)]="priority">
+          @for (p of priorities; track p) {
+            <option [ngValue]="p">{{ priorityLabels[p] }}</option>
+          }
+        </select>
+      </div>
+      <div class="inline-row">
+        <button type="button" class="btn" (click)="savePriority()">Save priority</button>
+        @if (d.handlerId === null) {
+          <select aria-label="Handler" [(ngModel)]="assignTo">
+            <option [ngValue]="null" disabled>Assign to handler</option>
+            @for (h of handlers(); track h.id) {
+              <option [ngValue]="h.id">{{ h.name }}</option>
+            }
+          </select>
+          <button type="button" class="btn" [disabled]="assignTo === null" (click)="assign()">Assign</button>
+        } @else {
+          <span class="hint">Handler: {{ d.handlerName }}</span>
+        }
+      </div>
+      <small class="hint">Change is recorded in the audit history</small>
+    }
+
+    @if (priorityMessage()) { <p class="confirm-box" role="status">{{ priorityMessage() }}</p> }
+    @if (priorityError()) { <p class="error-box" role="alert">{{ priorityError() }}</p> }
+  </section>
+</div>
