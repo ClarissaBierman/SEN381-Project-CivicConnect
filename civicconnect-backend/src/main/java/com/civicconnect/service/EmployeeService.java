@@ -21,7 +21,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/** Employee accounts and handler categories - Management only. Employees are deactivated, never deleted. */
 @Service
 public class EmployeeService {
 
@@ -103,7 +102,6 @@ public class EmployeeService {
         return EmployeeResponse.from(e);
     }
 
-    /** API-16 GET: categories a handler covers. */
     @Transactional(readOnly = true)
     public List<CategoryResponse> categories(Long empId) {
         db.begin(currentUser.get());
@@ -112,7 +110,6 @@ public class EmployeeService {
                 .map(hc -> CategoryResponse.from(hc.getCategory())).toList();
     }
 
-    /** API-16 PUT: replace the handler's categories with the given list (FR-005). */
     @Transactional
     public List<CategoryResponse> replaceCategories(Long empId, HandlerCategoriesUpdate body) {
         db.begin(currentUser.get());
@@ -130,8 +127,9 @@ public class EmployeeService {
         List<HandlerCategory> current = handlerCategoryRepository.findByEmployee(empId);
         Set<Long> have = new HashSet<>();
         for (HandlerCategory hc : current) {
-            if (wanted.contains(hc.getId().getCatId())) {
-                have.add(hc.getId().getCatId());
+            Long catId = hc.getCategory().getCatId();
+            if (wanted.contains(catId)) {
+                have.add(catId);
             } else {
                 handlerCategoryRepository.delete(hc);
             }
