@@ -1,0 +1,6 @@
+# Known, accepted gitleaks findings (one fingerprint per line).
+#
+# Old CI workflow (commit 48f1fed, file removed in 056bedf): CIVICCONNECT_JWT_SECRET was a dummy value
+# used only by that CI run. It is different from the JWT_SECRET in our .env, so it cannot be used to
+# sign tokens for a real environment. CI now generates a random secret per run.
+48f1fedfc8af9e4678b7d6bfa47e5162677279f3:civicconnect-backend/.github/workflows/ci.yml:generic-api-key:40
