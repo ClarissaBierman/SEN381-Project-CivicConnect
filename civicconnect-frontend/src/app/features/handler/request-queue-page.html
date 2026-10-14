@@ -29,6 +29,7 @@
         <select formControlName="sort">
           <option value="createdAt,desc">Sort: Newest</option>
           <option value="createdAt,asc">Sort: Oldest</option>
+          <option value="priority,desc">Sort: Priority</option>
         </select>
       </label>
     </form>
@@ -81,7 +82,7 @@
       }
 
       @if (detailError()) {
-        <!-- Marker 6: error-model message, e.g. 409 VERSION_CONFLICT -->
+        <!-- Marker 6: error-model message, e.g. 409 ALREADY_ASSIGNED -->
         <p class="error-box" role="alert">
           {{ detailError() }}
           <button type="button" class="link-btn" (click)="refresh()">Refresh</button>
@@ -116,6 +117,7 @@
           <textarea id="note" rows="3" [(ngModel)]="note" placeholder="Type a note ..."></textarea>
           <div class="inline-row">
             <button type="button" class="btn" [disabled]="busy() || !note.trim()" (click)="addNote()">Add note</button>
+            <label class="inline"><input type="checkbox" [(ngModel)]="noteVisibleToRequester" /> Visible to requester</label>
             <small class="hint">Notes cannot be edited or deleted</small>
           </div>
         </div>

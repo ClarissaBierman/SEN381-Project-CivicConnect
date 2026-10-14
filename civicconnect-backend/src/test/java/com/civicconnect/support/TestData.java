@@ -1,12 +1,13 @@
 package com.civicconnect.support;
 
-import com.civicconnect.error.ApiException;
-import com.civicconnect.error.ErrorCode;
-import com.civicconnect.model.Category;
-import com.civicconnect.model.Client;
-import com.civicconnect.model.Employee;
-import com.civicconnect.model.ServiceRequest;
-import com.civicconnect.security.CurrentUser;
+import com.civicconnect.access.domain.Client;
+import com.civicconnect.access.domain.Employee;
+import com.civicconnect.common.error.ApiException;
+import com.civicconnect.common.error.ErrorCode;
+import com.civicconnect.common.security.CurrentUser;
+import com.civicconnect.requests.domain.Category;
+import com.civicconnect.requests.domain.ServiceRequest;
+
 import org.junit.jupiter.api.function.Executable;
 
 import static org.assertj.core.api.Assertions.assertThat;

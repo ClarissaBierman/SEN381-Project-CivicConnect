@@ -14,11 +14,17 @@ export function problemMessage(p: ApiProblem | unknown): string {
       return 'Not found.';
     case 'SERVICE_UNAVAILABLE':
       return 'Service temporarily unavailable.';
+    case 'TOO_MANY_REQUESTS':
+      // e.g. "Too many failed sign-in attempts ... Try again in 15 minutes."
+      return problem.detail ?? 'Too many requests. Please wait a moment and try again.';
     case 'INVALID_TRANSITION':
     case 'REQUEST_CLOSED':
     case 'CATEGORY_INACTIVE':
     case 'VALIDATION_FAILED':
     case 'OUT_OF_SCOPE':
+    case 'LAST_MANAGER':
+    case 'CONFLICT':
+    case 'UNAUTHENTICATED':
       return problem.detail ?? 'The request could not be completed.';
     default:
       return 'Something went wrong. Please try again.';
