@@ -24,7 +24,7 @@ jobs:
       matrix:
         language: [ java-kotlin, javascript-typescript ]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
@@ -38,7 +38,7 @@ jobs:
     name: Secret scan (gitleaks)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       # Scans the commits in this push / pull request for passwords, keys and tokens
@@ -51,7 +51,7 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       # Fails a PR that adds a dependency with a known high or critical vulnerability
       - uses: actions/dependency-review-action@v4
         with:
