@@ -61,6 +61,7 @@ export class RequestQueuePage implements OnInit {
 
   protected toStatus: RequestStatus | null = null;
   protected note = '';
+  protected noteVisibleToRequester = false;
   protected assignTo: number | null = null;
 
   protected readonly isReadOnly = computed(() => {
@@ -85,6 +86,7 @@ export class RequestQueuePage implements OnInit {
   protected open(id: number): void {
     this.detailError.set(null);
     this.note = '';
+    this.noteVisibleToRequester = false;
     // Detail + audit are two calls (API-06, API-11) - the trade-off noted for the DTO decision.
     forkJoin({ detail: this.api.getRequest(id), audit: this.api.getAudit(id) }).subscribe({
       next: ({ detail, audit }) => {
@@ -104,21 +106,21 @@ export class RequestQueuePage implements OnInit {
   protected updateStatus(): void {
     const d = this.detail();
     if (!d || !this.toStatus) return;
-    this.run(this.api.changeStatus(d.id, this.toStatus, d.version));
+    this.run(this.api.changeStatus(d.id, this.toStatus));
   }
 
   // Marker 7: FR-010 / API-10 - append-only.
   protected addNote(): void {
     const d = this.detail();
     if (!d || !this.note.trim()) return;
-    this.run(this.api.addComment(d.id, this.note));
+    this.run(this.api.addComment(d.id, this.note, this.noteVisibleToRequester));
   }
 
   // Marker 9: FR-008 / API-08 - a second handler accepting at the same time gets 409 ALREADY_ASSIGNED.
   protected accept(): void {
     const d = this.detail();
     if (!d) return;
-    this.run(this.api.assign(d.id, d.version, this.isManager() ? (this.assignTo ?? undefined) : undefined));
+    this.run(this.api.assign(d.id, this.isManager() ? (this.assignTo ?? undefined) : undefined));
   }
 
   protected refresh(): void {
@@ -131,7 +133,7 @@ export class RequestQueuePage implements OnInit {
     return statuses.map((s) => STATUS_LABELS[s]).join(', ');
   }
 
-  // Every write reloads detail + audit so the screen shows the new version number (DEC-006).
+  // Every write reloads detail + audit so the screen shows the latest state.
   private run(call: Observable<unknown>): void {
     const id = this.detail()!.id;
     this.busy.set(true);
@@ -144,7 +146,7 @@ export class RequestQueuePage implements OnInit {
       },
       error: (p) => {
         this.busy.set(false);
-        this.detailError.set(problemMessage(p)); // marker 6: e.g. VERSION_CONFLICT message
+        this.detailError.set(problemMessage(p)); // marker 6: e.g. ALREADY_ASSIGNED or INVALID_TRANSITION
       },
     });
   }

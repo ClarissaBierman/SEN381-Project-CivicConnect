@@ -114,6 +114,8 @@ export class LoginPage {
 
   private loginMessage(err: HttpErrorResponse): string {
     if (err.status === 401) return 'Incorrect email or password.';
+    // B4: after 5 wrong passwords the email is locked for 15 minutes; the server says how long
+    if (err.status === 429) return err.error?.detail ?? 'Too many attempts. Please wait and try again.';
     if (err.status === 0) return 'Cannot reach the server. Check that the backend is running.';
     if (err.status === 400) return 'Enter a valid email address and password.';
     return 'Something went wrong. Please try again.';

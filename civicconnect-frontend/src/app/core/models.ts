@@ -1,5 +1,5 @@
 // Shapes of the /api/v1 DTOs from PED v2.0 Section 21 (API conventions + endpoint contract).
-// Field names are camelCase and timestamps ISO-8601 UTC, as the contract requires.
+// Field names are camelCase and timestamps ISO-8601 UTC instants ("...Z"), as the contract requires.
 
 export type Role = 'REQUESTER' | 'HANDLER' | 'MANAGER';
 
@@ -57,7 +57,7 @@ export interface CreatedRequest {
   createdAt: string;
 }
 
-// Row in API-05 (requester) and API-07 (staff) pages
+// Row in API-05 (requester) and API-07 (staff) pages. handlerId/handlerName are null for requesters.
 export interface RequestSummary {
   id: number;
   refNum: string;
@@ -65,10 +65,12 @@ export interface RequestSummary {
   categoryName: string;
   status: RequestStatus;
   priority: Priority | null;
+  location: string;
   handlerId: number | null;
   handlerName: string | null;
   createdAt: string;
   updatedAt: string;
+  closedAt: string | null;
 }
 
 // Requester-visible "Updates from CivicConnect" line (FR-004)
@@ -78,24 +80,25 @@ export interface RequestUpdate {
 }
 
 export interface RequestComment {
+  id: number;
   at: string;
-  author: string;
+  author: string; // "CivicConnect" for requesters (no staff names, ASR-005)
   content: string;
+  visibleToRequester: boolean;
 }
 
 // API-06 response. allowedTransitions is only filled for staff (computed server-side by TransitionPolicy, DEC-011).
+// Concurrent changes are handled by a row lock on the server, so no version number is sent (DEC-006 change).
 export interface RequestDetail extends RequestSummary {
   description: string;
-  location: string;
   attachmentUrl: string | null;
   requesterNumber: number; // requester shown by number only (ASR-005)
-  version: number; // optimistic locking (DEC-006)
-  updates: RequestUpdate[];
+  updates: RequestUpdate[]; // built in RequestApiService from the dates and requester-visible notes
   comments: RequestComment[];
   allowedTransitions: RequestStatus[];
 }
 
-// API-11 entry
+// API-11 entry (newest first in the screens)
 export interface AuditEntry {
   at: string;
   actor: string;
@@ -110,26 +113,28 @@ export interface RequestFilter {
   categoryId: number | null;
   from: string | null; // yyyy-MM-dd
   to: string | null;
-  sort: 'createdAt,desc' | 'createdAt,asc';
+  sort: 'createdAt,desc' | 'createdAt,asc' | 'priority,desc' | 'updatedAt,desc';
   page: number;
   size: number;
 }
 
-export interface CategoryCounts {
-  categoryId: number;
-  categoryName: string;
+export interface Counts {
+  total: number;
   open: number;
   overdue: number;
   resolved: number;
   closed: number;
+  rejected: number;
 }
 
-// API-17 response - counts only, no personal data (ASR-005, POPIA)
-export interface ActivityReport {
-  open: number;
-  overdue: number;
-  resolved: number;
-  closed: number;
+export interface CategoryCounts extends Counts {
+  categoryId: number;
+  categoryName: string;
+}
+
+// API-17 response - counts only, no personal data (ASR-005, POPIA). Totals are flattened onto the report.
+export interface ActivityReport extends Counts {
+  generatedAt: string;
   byCategory: CategoryCounts[];
 }
 

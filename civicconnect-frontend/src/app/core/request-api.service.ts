@@ -1,11 +1,14 @@
+import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
-import { Observable, of, throwError, timer } from 'rxjs';
-import { delay, switchMap } from 'rxjs/operators';
+import { Observable, throwError } from 'rxjs';
+import { catchError, map } from 'rxjs/operators';
 import { Category } from '../category';
 import {
   ActivityReport,
   ApiProblem,
   AuditEntry,
+  CategoryCounts,
+  Counts,
   CreatedRequest,
   HandlerOption,
   NewRequest,
@@ -16,426 +19,273 @@ import {
   RequestFilter,
   RequestStatus,
   RequestSummary,
+  RequestUpdate,
   STATUS_LABELS,
 } from './models';
-import { SessionService } from './session.service';
 
 /*
- * Client for the Requests endpoints (API-04 to API-13, API-17).
+ * Client for the Requests, Reporting and related endpoints (API-04 to API-17).
  *
- * TEMPORARY IN-MEMORY IMPLEMENTATION: the backend Requests module is still "Planned" in the
- * PED endpoint contract, so each method below simulates the documented server behaviour
- * (status codes, error codes, scope checks) against seed data. The method signatures match the
- * contract, so when an endpoint is built only the method body changes, e.g.
- *
- *   submitRequest(body) { return this.http.post<CreatedRequest>('/api/v1/requests', body); }
- *
- * The screens do not need to change.
+ * Calls the real Spring Boot API. The server's JSON is mapped to the shapes the screens already use,
+ * so the screens did not have to change (apart from no longer sending a version number), and every
+ * error is turned into the PED error body (ApiProblem) so problemMessage() keeps working.
  */
 
-// --- simulated server state ---------------------------------------------------------------
+const API = '/api/v1';
 
-interface StoredRequest {
+// ---- server shapes (only what is mapped here) ----------------------------------------------------
+
+interface ServerPage<T> {
+  content: T[];
+  page: { size: number; number: number; totalElements: number; totalPages: number };
+}
+
+interface ServerCategory {
+  id: number;
+  catName: string;
+  active: boolean;
+}
+
+interface ServerSummary {
   id: number;
   refNum: string;
   categoryId: number;
-  description: string;
-  location: string;
-  attachmentUrl: string | null;
+  categoryName: string;
   status: RequestStatus;
   priority: Priority | null;
-  requesterNumber: number;
+  location: string;
   handlerId: number | null;
+  handlerName: string | null;
   createdAt: string;
   updatedAt: string;
-  version: number;
-  audit: AuditEntry[];
-  comments: RequestComment[];
+  closedAt: string | null;
 }
 
-interface StoredHandler {
+interface ServerComment {
   id: number;
-  name: string;
-  categoryIds: number[]; // EmployeeCategory scope (DEC-002)
+  authorName: string | null;
+  content: string;
+  visibleToRequester: boolean;
+  createdAt: string;
 }
 
-// Server-side rule (TransitionPolicy, DEC-011). It lives here ONLY because this class is
-// standing in for the server - the real Angular code never decides transitions itself,
-// it just renders allowedTransitions from API-06.
-const TRANSITIONS: Record<RequestStatus, RequestStatus[]> = {
-  NEW: ['ASSIGNED', 'REJECTED'],
-  ASSIGNED: ['IN_PROGRESS', 'REJECTED'],
-  IN_PROGRESS: ['RESOLVED'],
-  RESOLVED: ['CLOSED'],
-  CLOSED: [],
-  REJECTED: [],
-};
+interface ServerDetail extends ServerSummary {
+  description: string;
+  attachmentUrl: string | null;
+  requesterId: number;
+  allowedTransitions: RequestStatus[] | null;
+  comments: ServerComment[];
+}
 
-const OPEN: RequestStatus[] = ['NEW', 'ASSIGNED', 'IN_PROGRESS'];
-const READ_ONLY: RequestStatus[] = ['CLOSED', 'REJECTED']; // FR-011
-const OVERDUE_DAYS = 7; // FR-012 / CR-004
-const LATENCY_MS = 150;
+interface ServerHistoryEntry {
+  at: string;
+  actor: string;
+  action: string;
+  fromStatus: RequestStatus | null;
+  toStatus: RequestStatus | null;
+}
 
-const daysAgo = (days: number, hour = 10): string => {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  d.setHours(hour, 0, 0, 0);
-  return d.toISOString();
-};
+interface ServerReport {
+  generatedAt: string;
+  totals: Counts;
+  byCategory: CategoryCounts[];
+}
 
 @Injectable({ providedIn: 'root' })
 export class RequestApiService {
-  private readonly session = inject(SessionService);
+  private readonly http = inject(HttpClient);
 
-  private readonly categories: Category[] = [
-    { catId: 1, catName: 'Plumbing', active: true },
-    { catId: 2, catName: 'Electrical', active: true },
-    { catId: 3, catName: 'IT support', active: true },
-    { catId: 4, catName: 'Parking (retired)', active: false },
-  ];
-
-  private readonly handlers: StoredHandler[] = [
-    { id: 1, name: 'T. Mokoena', categoryIds: [1, 2] },
-    { id: 2, name: 'J. Smith', categoryIds: [1, 3] },
-  ];
-
-  private requests: StoredRequest[] = [
-    this.seed(17, 3, 'Laptop will not connect to Wi-Fi', 'Library, desk 4', 'CLOSED', 'LOW', 10234, 2, 20),
-    this.seed(19, 2, 'Light flickering in corridor', 'Block A, floor 2', 'RESOLVED', 'LOW', 10511, 1, 18),
-    this.seed(28, 1, 'Leaking tap in kitchen', 'Block B, kitchen', 'IN_PROGRESS', 'MEDIUM', 10377, 2, 12),
-    this.seed(31, 2, 'Plug point sparks when used', 'Block C, room 12', 'ASSIGNED', 'HIGH', 10234, 1, 9),
-    this.seed(35, 3, 'Printer queue stuck', 'Admin office', 'NEW', null, 10600, null, 8),
-    this.seed(39, 1, 'Toilet keeps running', 'Block D, ground floor', 'NEW', null, 10788, null, 3),
-    this.seed(42, 1, 'Blocked drain outside entrance', 'Main entrance', 'NEW', null, 10234, null, 1),
-  ];
-  private nextId = 43;
-
-  // ---- API-13 GET /categories  (requesters only ever get active ones) ----
+  // ---- API-13 GET /categories  (the server forces active-only for requesters) ----
   getCategories(activeOnly = true): Observable<Category[]> {
-    const forced = this.session.user()?.role === 'REQUESTER' ? true : activeOnly;
-    return this.ok(this.categories.filter((c) => !forced || c.active));
+    const params = new HttpParams().set('active', activeOnly);
+    return this.call(
+      this.http.get<ServerCategory[]>(`${API}/categories`, { params }).pipe(map((list) => list.map(toCategory))),
+    );
   }
 
   // ---- API-04 POST /requests ----
   submitRequest(body: NewRequest): Observable<CreatedRequest> {
-    const fieldErrors: { field: string; message: string }[] = [];
-    if (!body.categoryId) fieldErrors.push({ field: 'categoryId', message: 'Category is required' });
-    if (!body.description?.trim()) fieldErrors.push({ field: 'description', message: 'Description is required' });
-    else if (body.description.length > 2000)
-      fieldErrors.push({ field: 'description', message: 'Description must be 2000 characters or fewer' });
-    if (!body.location?.trim()) fieldErrors.push({ field: 'location', message: 'Location is required' });
-    else if (body.location.length > 255)
-      fieldErrors.push({ field: 'location', message: 'Location must be 255 characters or fewer' });
-    if (fieldErrors.length) {
-      return this.fail(400, 'VALIDATION_FAILED', 'Validation failed', 'Some fields are invalid.', fieldErrors);
-    }
-    const category = this.categories.find((c) => c.catId === body.categoryId);
-    if (!category?.active) {
-      return this.fail(422, 'CATEGORY_INACTIVE', 'Category inactive', 'This category is no longer available.');
-    }
-
-    const now = new Date().toISOString();
-    const id = this.nextId++;
-    const requesterNumber = this.session.user()?.requesterNumber ?? 0;
-    const stored: StoredRequest = {
-      id,
-      refNum: this.refNum(id, now),
-      categoryId: body.categoryId,
-      description: body.description.trim(),
-      location: body.location.trim(),
-      attachmentUrl: body.attachmentUrl,
-      status: 'NEW',
-      priority: null,
-      requesterNumber,
-      handlerId: null,
-      createdAt: now,
-      updatedAt: now,
-      version: 0,
-      audit: [{ at: now, actor: `Requester #${requesterNumber}`, action: 'submitted request', fromStatus: null, toStatus: 'NEW' }],
-      comments: [],
-    };
-    this.requests.push(stored);
-    return this.ok({ id, refNum: stored.refNum, status: stored.status, createdAt: now }, 201);
+    return this.call(
+      this.http.post<ServerDetail>(`${API}/requests`, body).pipe(
+        map((d) => ({ id: d.id, refNum: d.refNum, status: d.status, createdAt: d.createdAt })),
+      ),
+    );
   }
 
   // ---- API-05 GET /requests/mine  (own requests only, newest first) ----
   getMyRequests(page = 0, size = 20): Observable<Page<RequestSummary>> {
-    const me = this.session.user()?.requesterNumber;
-    const mine = this.requests
-      .filter((r) => r.requesterNumber === me)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    return this.ok(this.page(mine.map((r) => this.toSummary(r)), page, size));
+    const params = new HttpParams().set('page', page).set('size', size).set('sort', 'createdAt,desc');
+    return this.call(
+      this.http.get<ServerPage<ServerSummary>>(`${API}/requests/mine`, { params }).pipe(map((p) => toPage(p, toSummary))),
+    );
   }
 
   // ---- API-06 GET /requests/{id} ----
   getRequest(id: number): Observable<RequestDetail> {
-    const r = this.requests.find((x) => x.id === id);
-    const user = this.session.user();
-    // Another client's request returns 404, not 403, so its existence is not revealed (OWASP API1).
-    if (!r || (user?.role === 'REQUESTER' && r.requesterNumber !== user.requesterNumber)) {
-      return this.fail(404, 'NOT_FOUND', 'Not found', 'Request not found.');
-    }
-    if (!this.inScope(r)) return this.forbidden();
-
-    const isStaff = user?.role !== 'REQUESTER';
-    return this.ok({
-      ...this.toSummary(r),
-      description: r.description,
-      location: r.location,
-      attachmentUrl: r.attachmentUrl,
-      requesterNumber: r.requesterNumber,
-      version: r.version,
-      updates: this.requesterUpdates(r),
-      comments: r.comments,
-      allowedTransitions: isStaff ? this.allowedFor(r) : [],
-    });
+    return this.call(this.http.get<ServerDetail>(`${API}/requests/${id}`).pipe(map(toDetail)));
   }
 
   // ---- API-07 GET /requests  (handler: own categories only; manager: all) ----
   getRequests(f: RequestFilter): Observable<Page<RequestSummary>> {
-    if (this.session.user()?.role === 'REQUESTER') return this.forbidden();
-    const rows = this.requests
-      .filter((r) => this.inScope(r))
-      .filter((r) => !f.status || r.status === f.status)
-      .filter((r) => !f.categoryId || r.categoryId === f.categoryId)
-      .filter((r) => !f.from || r.createdAt.slice(0, 10) >= f.from)
-      .filter((r) => !f.to || r.createdAt.slice(0, 10) <= f.to)
-      .sort((a, b) => (f.sort === 'createdAt,asc' ? 1 : -1) * a.createdAt.localeCompare(b.createdAt));
-    return this.ok(this.page(rows.map((r) => this.toSummary(r)), f.page, f.size));
+    let params = new HttpParams().set('page', f.page).set('size', f.size).set('sort', f.sort);
+    if (f.status) params = params.set('status', f.status);
+    if (f.categoryId) params = params.set('categoryId', f.categoryId);
+    if (f.from) params = params.set('from', f.from);
+    if (f.to) params = params.set('to', f.to);
+    return this.call(
+      this.http.get<ServerPage<ServerSummary>>(`${API}/requests`, { params }).pipe(map((p) => toPage(p, toSummary))),
+    );
   }
 
-  // ---- API-08 POST /requests/{id}/assignment  (handler: self; manager: any handler) ----
-  assign(id: number, version: number, employeeId?: number): Observable<RequestDetail> {
-    const user = this.session.user();
-    const r = this.requests.find((x) => x.id === id);
-    if (!r) return this.fail(404, 'NOT_FOUND', 'Not found', 'Request not found.');
-    if (!this.inScope(r)) return this.forbidden();
-    if (r.version !== version) return this.versionConflict();
-    if (READ_ONLY.includes(r.status)) return this.closed();
-    if (r.handlerId !== null) {
-      return this.fail(409, 'ALREADY_ASSIGNED', 'Already assigned', 'This request is already assigned.');
-    }
-    const handlerId = user?.role === 'MANAGER' && employeeId ? employeeId : user?.employeeId;
-    const handler = this.handlers.find((h) => h.id === handlerId);
-    if (!handler || !handler.categoryIds.includes(r.categoryId)) {
-      return this.fail(422, 'OUT_OF_SCOPE', 'Handler not in category', 'That handler does not cover this category.');
-    }
-    const from = r.status;
-    r.handlerId = handler.id;
-    if (r.status === 'NEW') r.status = 'ASSIGNED';
-    this.touch(r, user?.role === 'MANAGER' ? `assigned to ${handler.name}` : 'accepted request', from);
-    return this.getRequest(id);
+  // ---- API-08 POST /requests/{id}/assignment  (handler: self, no body; manager: employeeId) ----
+  assign(id: number, employeeId?: number): Observable<RequestDetail> {
+    const body = employeeId === undefined ? null : { employeeId };
+    return this.call(this.http.post<ServerDetail>(`${API}/requests/${id}/assignment`, body).pipe(map(toDetail)));
   }
 
-  // ---- API-09 PATCH /requests/{id}/status ----
-  changeStatus(id: number, toStatus: RequestStatus, version: number, note?: string): Observable<RequestDetail> {
-    const r = this.requests.find((x) => x.id === id);
-    if (!r) return this.fail(404, 'NOT_FOUND', 'Not found', 'Request not found.');
-    if (!this.inScope(r)) return this.forbidden();
-    if (r.version !== version) return this.versionConflict();
-    if (READ_ONLY.includes(r.status)) return this.closed();
-    if (!this.allowedFor(r).includes(toStatus)) {
-      return this.fail(
-        422,
-        'INVALID_TRANSITION',
-        'Invalid status transition',
-        `A request cannot move from ${STATUS_LABELS[r.status]} to ${STATUS_LABELS[toStatus]}.`,
-      );
-    }
-    const from = r.status;
-    r.status = toStatus;
-    if (note?.trim()) r.comments.push({ at: new Date().toISOString(), author: this.actorName(), content: note.trim() });
-    this.touch(r, 'changed status', from);
-    return this.getRequest(id);
+  // ---- API-09 PATCH /requests/{id}/status  (an optional note is saved as a comment) ----
+  changeStatus(id: number, toStatus: RequestStatus, note?: string, noteVisibleToRequester = false): Observable<RequestDetail> {
+    const body = { toStatus, note: note?.trim() || null, noteVisibleToRequester };
+    return this.call(this.http.patch<ServerDetail>(`${API}/requests/${id}/status`, body).pipe(map(toDetail)));
   }
 
   // ---- API-10 POST /requests/{id}/comments  (append-only) ----
-  addComment(id: number, content: string): Observable<RequestComment> {
-    const r = this.requests.find((x) => x.id === id);
-    if (!r) return this.fail(404, 'NOT_FOUND', 'Not found', 'Request not found.');
-    if (!this.inScope(r)) return this.forbidden();
-    if (!content.trim()) {
-      return this.fail(400, 'VALIDATION_FAILED', 'Validation failed', 'Note is empty.', [
-        { field: 'content', message: 'Note cannot be empty' },
-      ]);
-    }
-    if (READ_ONLY.includes(r.status)) return this.closed();
-    const comment = { at: new Date().toISOString(), author: this.actorName(), content: content.trim() };
-    r.comments.push(comment);
-    r.audit.push({ at: comment.at, actor: comment.author, action: 'added a note', fromStatus: null, toStatus: null });
-    return this.ok(comment, 201);
+  addComment(id: number, content: string, visibleToRequester = false): Observable<RequestComment> {
+    return this.call(
+      this.http
+        .post<ServerComment>(`${API}/requests/${id}/comments`, { content: content.trim(), visibleToRequester })
+        .pipe(map(toComment)),
+    );
   }
 
-  // ---- API-11 GET /requests/{id}/audit  (newest first) ----
+  // ---- API-11 GET /requests/{id}/audit  (server: oldest first; screens show newest first) ----
   getAudit(id: number): Observable<AuditEntry[]> {
-    const r = this.requests.find((x) => x.id === id);
-    if (!r) return this.fail(404, 'NOT_FOUND', 'Not found', 'Request not found.');
-    if (this.session.user()?.role === 'REQUESTER' || !this.inScope(r)) return this.forbidden();
-    return this.ok([...r.audit].reverse());
+    return this.call(
+      this.http.get<ServerHistoryEntry[]>(`${API}/requests/${id}/audit`).pipe(
+        map((list) =>
+          list
+            .map((e) => ({ at: e.at, actor: e.actor, action: e.action, fromStatus: e.fromStatus, toStatus: e.toStatus }))
+            .reverse(),
+        ),
+      ),
+    );
   }
 
   // ---- API-12 PATCH /requests/{id}/priority  (Management only, FR-016) ----
-  setPriority(id: number, priority: Priority, version: number): Observable<RequestDetail> {
-    if (this.session.user()?.role !== 'MANAGER') return this.forbidden();
-    const r = this.requests.find((x) => x.id === id);
-    if (!r) return this.fail(404, 'NOT_FOUND', 'Not found', 'Request not found.');
-    if (r.version !== version) return this.versionConflict();
-    r.priority = priority;
-    this.touch(r, `set priority to ${priority.toLowerCase()}`, null);
-    return this.getRequest(id);
+  setPriority(id: number, priority: Priority): Observable<RequestDetail> {
+    return this.call(this.http.patch<ServerDetail>(`${API}/requests/${id}/priority`, { priority }).pipe(map(toDetail)));
   }
 
   // ---- API-17 GET /reports/activity  (Management only, counts only) ----
   getActivity(from: string | null, to: string | null, categoryId: number | null, status: RequestStatus | null): Observable<ActivityReport> {
-    if (this.session.user()?.role !== 'MANAGER') return this.forbidden();
-    if (from && to && from > to) {
-      return this.fail(400, 'VALIDATION_FAILED', 'Validation failed', '"From" date must be before "To" date.');
-    }
-    const rows = this.requests
-      .filter((r) => !from || r.createdAt.slice(0, 10) >= from)
-      .filter((r) => !to || r.createdAt.slice(0, 10) <= to)
-      .filter((r) => !categoryId || r.categoryId === categoryId)
-      .filter((r) => !status || r.status === status);
-
-    const count = (list: StoredRequest[]) => ({
-      open: list.filter((r) => OPEN.includes(r.status)).length,
-      overdue: list.filter((r) => this.isOverdue(r)).length,
-      resolved: list.filter((r) => r.status === 'RESOLVED').length,
-      closed: list.filter((r) => r.status === 'CLOSED').length,
-    });
-    const byCategory = this.categories
-      .filter((c) => !categoryId || c.catId === categoryId)
-      .map((c) => ({ categoryId: c.catId!, categoryName: c.catName, ...count(rows.filter((r) => r.categoryId === c.catId)) }));
-    return this.ok({ ...count(rows), byCategory });
+    let params = new HttpParams();
+    if (from) params = params.set('from', from);
+    if (to) params = params.set('to', to);
+    if (categoryId) params = params.set('categoryId', categoryId);
+    if (status) params = params.set('status', status);
+    return this.call(
+      this.http
+        .get<ServerReport>(`${API}/reports/activity`, { params })
+        .pipe(map((r) => ({ ...r.totals, generatedAt: r.generatedAt, byCategory: r.byCategory }))),
+    );
   }
 
-  // NOT YET IN THE API CONTRACT: the manager's "Assign to handler" list needs a way to list handlers
-  // for a category. Raise a change request to add e.g. GET /employees?role=HANDLER&categoryId=.
+  // ---- GET /categories/{id}/handlers  (Management: active handlers who cover the category) ----
   getHandlers(categoryId: number): Observable<HandlerOption[]> {
-    return this.ok(this.handlers.filter((h) => h.categoryIds.includes(categoryId)).map(({ id, name }) => ({ id, name })));
+    return this.call(this.http.get<HandlerOption[]>(`${API}/categories/${categoryId}/handlers`));
   }
 
-  // --- helpers ------------------------------------------------------------------------------
+  /** Every error reaches the screens as the PED error body (ApiProblem), as the in-memory version did. */
+  private call<T>(request: Observable<T>): Observable<T> {
+    return request.pipe(catchError((err: HttpErrorResponse) => throwError(() => toProblem(err))));
+  }
+}
 
-  private seed(
-    id: number, categoryId: number, description: string, location: string, status: RequestStatus,
-    priority: Priority | null, requesterNumber: number, handlerId: number | null, ageDays: number,
-  ): StoredRequest {
-    const createdAt = daysAgo(ageDays, 11);
-    const handler = this.handlers.find((h) => h.id === handlerId)?.name ?? 'Handler';
-    const audit: AuditEntry[] = [
-      { at: createdAt, actor: `Requester #${requesterNumber}`, action: 'submitted request', fromStatus: null, toStatus: 'NEW' },
-    ];
-    // Walk the state machine so the seeded audit trail is consistent with the current status.
-    const path: RequestStatus[] = ['ASSIGNED', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'];
-    let prev: RequestStatus = 'NEW';
-    for (let i = 0; i < path.indexOf(status) + 1; i++) {
-      audit.push({ at: daysAgo(ageDays - i - 1, 9 + i), actor: handler, action: i === 0 ? 'accepted request' : 'changed status', fromStatus: prev, toStatus: path[i] });
-      prev = path[i];
-    }
+// ---- mapping ------------------------------------------------------------------------------------
+
+export function toProblem(err: HttpErrorResponse): ApiProblem {
+  const body = err.error as Partial<ApiProblem> | null;
+  if (body && typeof body === 'object' && body.code) {
     return {
-      id, refNum: this.refNum(id, createdAt), categoryId, description, location, attachmentUrl: null,
-      status, priority, requesterNumber, handlerId, createdAt, updatedAt: audit[audit.length - 1].at,
-      version: audit.length - 1, audit, comments: [],
+      status: body.status ?? err.status,
+      code: body.code,
+      title: body.title ?? '',
+      detail: body.detail ?? '',
+      fieldErrors: body.fieldErrors ?? [],
     };
   }
+  // No error body: the server could not be reached, or something in between answered
+  return err.status === 0
+    ? { status: 0, code: 'SERVICE_UNAVAILABLE', title: 'Service unavailable', detail: 'The server cannot be reached.' }
+    : { status: err.status, code: 'UNKNOWN', title: err.statusText, detail: err.message };
+}
 
-  private refNum(id: number, iso: string): string {
-    return `CC-${iso.slice(0, 4)}-${String(id).padStart(5, '0')}`;
-  }
+function toCategory(c: ServerCategory): Category {
+  return { catId: c.id, catName: c.catName, active: c.active };
+}
 
-  private toSummary(r: StoredRequest): RequestSummary {
-    return {
-      id: r.id,
-      refNum: r.refNum,
-      categoryId: r.categoryId,
-      categoryName: this.categories.find((c) => c.catId === r.categoryId)?.catName ?? '?',
-      status: r.status,
-      priority: r.priority,
-      handlerId: r.handlerId,
-      handlerName: this.handlers.find((h) => h.id === r.handlerId)?.name ?? null,
-      createdAt: r.createdAt,
-      updatedAt: r.updatedAt,
-    };
-  }
+function toPage<S, T>(p: ServerPage<S>, mapRow: (row: S) => T): Page<T> {
+  return {
+    content: p.content.map(mapRow),
+    page: p.page.number,
+    size: p.page.size,
+    totalElements: p.page.totalElements,
+    totalPages: Math.max(1, p.page.totalPages),
+  };
+}
 
-  // FR-004 wording for requesters - no staff names (ASR-005).
-  private requesterUpdates(r: StoredRequest) {
-    return [...r.audit]
-      .filter((a) => a.toStatus)
-      .reverse()
-      .map((a) => ({
-        at: a.at,
-        text: a.toStatus === 'NEW' ? 'Request submitted'
-          : a.toStatus === 'ASSIGNED' ? 'Assigned to a handler'
-          : `Status changed to ${STATUS_LABELS[a.toStatus!]}`,
-      }));
-  }
+function toSummary(s: ServerSummary): RequestSummary {
+  return {
+    id: s.id,
+    refNum: s.refNum,
+    categoryId: s.categoryId,
+    categoryName: s.categoryName,
+    status: s.status,
+    priority: s.priority,
+    location: s.location,
+    handlerId: s.handlerId,
+    handlerName: s.handlerName,
+    createdAt: s.createdAt,
+    updatedAt: s.updatedAt,
+    closedAt: s.closedAt,
+  };
+}
 
-  private allowedFor(r: StoredRequest): RequestStatus[] {
-    // ASSIGNED is reached through API-08 (accept/assign), not the status dropdown.
-    return TRANSITIONS[r.status].filter((s) => s !== 'ASSIGNED');
-  }
+function toComment(c: ServerComment): RequestComment {
+  return {
+    id: c.id,
+    at: c.createdAt,
+    author: c.authorName ?? 'CivicConnect',
+    content: c.content,
+    visibleToRequester: c.visibleToRequester,
+  };
+}
 
-  private inScope(r: StoredRequest): boolean {
-    const user = this.session.user();
-    if (user?.role !== 'HANDLER') return true;
-    return this.handlers.find((h) => h.id === user.employeeId)?.categoryIds.includes(r.categoryId) ?? false;
-  }
+function toDetail(d: ServerDetail): RequestDetail {
+  const comments = d.comments.map(toComment);
+  return {
+    ...toSummary(d),
+    description: d.description,
+    attachmentUrl: d.attachmentUrl,
+    requesterNumber: d.requesterId,
+    allowedTransitions: d.allowedTransitions ?? [],
+    comments,
+    updates: requesterUpdates(d, comments),
+  };
+}
 
-  private isOverdue(r: StoredRequest): boolean {
-    const ageMs = Date.now() - new Date(r.createdAt).getTime();
-    return OPEN.includes(r.status) && ageMs > OVERDUE_DAYS * 24 * 60 * 60 * 1000;
+/**
+ * FR-004 "Updates from CivicConnect", newest first: submission, the current status, and every note
+ * staff marked as visible to the requester. (The full step-by-step history is the audit trail, which
+ * only staff can read.)
+ */
+function requesterUpdates(d: ServerDetail, comments: RequestComment[]): RequestUpdate[] {
+  const updates: RequestUpdate[] = [{ at: d.createdAt, text: 'Request submitted' }];
+  if (d.status !== 'NEW') {
+    updates.push({ at: d.closedAt ?? d.updatedAt, text: `Status: ${STATUS_LABELS[d.status]}` });
   }
-
-  private actorName(): string {
-    const user = this.session.user();
-    return this.handlers.find((h) => h.id === user?.employeeId)?.name ?? user?.badge ?? 'Unknown';
+  for (const c of comments.filter((x) => x.visibleToRequester)) {
+    updates.push({ at: c.at, text: `Note: ${c.content}` });
   }
-
-  private touch(r: StoredRequest, action: string, from: RequestStatus | null): void {
-    const now = new Date().toISOString();
-    r.version++;
-    r.updatedAt = now;
-    const statusChanged = from !== null && from !== r.status;
-    r.audit.push({
-      at: now,
-      actor: this.actorName(),
-      action,
-      fromStatus: statusChanged ? from : null,
-      toStatus: statusChanged ? r.status : null,
-    });
-  }
-
-  private page<T>(rows: T[], page: number, size: number): Page<T> {
-    return {
-      content: rows.slice(page * size, page * size + size),
-      page,
-      size,
-      totalElements: rows.length,
-      totalPages: Math.max(1, Math.ceil(rows.length / size)),
-    };
-  }
-
-  private ok<T>(body: T, _status = 200): Observable<T> {
-    // structuredClone so screens can never mutate "server" state by reference
-    return of(structuredClone(body)).pipe(delay(LATENCY_MS));
-  }
-
-  private fail<T>(status: number, code: string, title: string, detail: string, fieldErrors?: ApiProblem['fieldErrors']): Observable<T> {
-    const problem: ApiProblem = { status, code, title, detail, fieldErrors };
-    return timer(LATENCY_MS).pipe(switchMap(() => throwError(() => problem)));
-  }
-
-  private forbidden<T>(): Observable<T> {
-    return this.fail(403, 'FORBIDDEN', 'Forbidden', 'You do not have access.');
-  }
-
-  private versionConflict<T>(): Observable<T> {
-    return this.fail(409, 'VERSION_CONFLICT', 'Version conflict', 'This request was updated by someone else.');
-  }
-
-  private closed<T>(): Observable<T> {
-    return this.fail(422, 'REQUEST_CLOSED', 'Request closed', 'Closed or rejected requests are read-only.');
-  }
+  return updates.sort((a, b) => b.at.localeCompare(a.at));
 }

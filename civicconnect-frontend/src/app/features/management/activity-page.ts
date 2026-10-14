@@ -99,11 +99,11 @@ export class ActivityPage implements OnInit {
     });
   }
 
-  // Marker 5: FR-016 / API-12 - only Management sets priority; version sent for optimistic locking.
+  // Marker 5: FR-016 / API-12 - only Management sets priority.
   protected savePriority(): void {
     const d = this.selected();
     if (!d) return;
-    this.api.setPriority(d.id, this.priority, d.version).subscribe({
+    this.api.setPriority(d.id, this.priority).subscribe({
       next: (updated) => {
         this.selected.set(updated);
         this.priorityMessage.set('Priority saved.');
@@ -117,7 +117,7 @@ export class ActivityPage implements OnInit {
   protected assign(): void {
     const d = this.selected();
     if (!d || this.assignTo === null) return;
-    this.api.assign(d.id, d.version, this.assignTo).subscribe({
+    this.api.assign(d.id, this.assignTo).subscribe({
       next: (updated) => {
         this.selected.set(updated);
         this.priorityMessage.set(`Assigned to ${updated.handlerName}.`);

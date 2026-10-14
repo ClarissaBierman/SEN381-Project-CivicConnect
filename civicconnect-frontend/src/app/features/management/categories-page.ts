@@ -2,9 +2,8 @@ import { Component, inject, OnInit, signal } from '@angular/core';
 import { Category } from '../../category';
 import { CategoryService } from '../../category.service';
 
-// The original IB-1 prototype screen (moved here from app.html). It still calls the REAL backend
-// (GET /api/categories via CategoryService), so it keeps the working Angular -> Spring -> JPA ->
-// PostgreSQL path cited as implementation evidence in PED Section 21.9.
+// The original IB-1 prototype screen (moved here from app.html). Calls the real backend
+// (GET /api/v1/categories via CategoryService, with the login token).
 @Component({
   selector: 'app-categories-page',
   template: `
