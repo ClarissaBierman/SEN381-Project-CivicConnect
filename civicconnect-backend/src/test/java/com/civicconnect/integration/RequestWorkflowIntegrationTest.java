@@ -1,10 +1,21 @@
 package com.civicconnect.integration;
 
-import com.civicconnect.dto.*;
-import com.civicconnect.error.ErrorCode;
-import com.civicconnect.model.ServiceRequest.Status;
-import com.civicconnect.security.CurrentUser;
-import com.civicconnect.service.*;
+import com.civicconnect.access.dto.ClientResponse;
+import com.civicconnect.access.dto.RegisterRequest;
+import com.civicconnect.access.service.AuthService;
+import com.civicconnect.common.error.ErrorCode;
+import com.civicconnect.common.security.CurrentUser;
+import com.civicconnect.reporting.domain.AuditResource;
+import com.civicconnect.reporting.dto.RequestHistoryEntry;
+import com.civicconnect.reporting.service.AuditService;
+import com.civicconnect.requests.dto.NewComment;
+import com.civicconnect.requests.dto.NewServiceRequest;
+import com.civicconnect.requests.dto.RequestDetail;
+import com.civicconnect.requests.dto.StatusChangeRequest;
+import com.civicconnect.requests.service.CommentService;
+import com.civicconnect.requests.service.RequestService;
+
+import com.civicconnect.requests.domain.ServiceRequest.Status;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -91,17 +102,21 @@ class RequestWorkflowIntegrationTest {
         // The audit trigger recorded every change with the right actor (NFR-006, DEC-007)
         loginAs(AYESHA, CurrentUser.Role.STAFF);
         // (inside one test transaction every row has the same timestamp, so the order is not checked)
-        List<AuditEntryResponse> history = audit.forRequest(created.id());
-        assertThat(history).extracting(e -> e.table() + " " + e.operation()).containsExactlyInAnyOrder(
-                "request INSERT", "request_handler INSERT", "request UPDATE", "request UPDATE",
-                "comment INSERT", "comment INSERT");
-        for (AuditEntryResponse e : history) {
-            if (e.table().equals("request") && e.operation().equals("INSERT")) {
-                assertThat(e.clientId()).as("submitted by the requester").isEqualTo(THABO);
-                assertThat(e.empId()).isNull();
+        List<RequestHistoryEntry> history = audit.forRequest(created.id());
+        assertThat(history).extracting(RequestHistoryEntry::action).containsExactlyInAnyOrder(
+                "submitted the request", "assigned Ayesha Patel as handler", "changed the status", "changed the status",
+                "added a note for the requester", "added an internal note");
+        assertThat(history).filteredOn(e -> e.toStatus() == Status.IN_PROGRESS)
+                .extracting(RequestHistoryEntry::fromStatus).containsExactly(Status.ASSIGNED);
+        for (RequestHistoryEntry e : history) {
+            if (e.action().equals("submitted the request")) {
+                assertThat(e.actorClientId()).as("submitted by the requester").isEqualTo(THABO);
+                assertThat(e.actor()).isEqualTo("Requester #" + THABO);
+                assertThat(e.actorEmpId()).isNull();
             } else {
-                assertThat(e.empId()).as(e.table() + " " + e.operation() + " done by the handler").isEqualTo(AYESHA);
-                assertThat(e.clientId()).isNull();
+                assertThat(e.actorEmpId()).as(e.action() + " done by the handler").isEqualTo(AYESHA);
+                assertThat(e.actor()).isEqualTo("Ayesha Patel");
+                assertThat(e.actorClientId()).isNull();
             }
         }
     }
@@ -127,10 +142,14 @@ class RequestWorkflowIntegrationTest {
         assertThat(stored).startsWith("$2").doesNotContain("Secret123!");
 
         loginAs(LERATO, CurrentUser.Role.MANAGEMENT);
-        var entries = audit.search("client", String.valueOf(client.id()), "INSERT", PageRequest.of(0, 5)).getContent();
+        var entries = audit.search(AuditResource.CLIENTS, String.valueOf(client.id()), "INSERT", PageRequest.of(0, 5))
+                .getContent();
         assertThat(entries).hasSize(1);
         assertThat(entries.get(0).clientId()).as("the new client is the actor").isEqualTo(client.id());
-        assertThat(entries.get(0).newData()).doesNotContain("password").doesNotContain("$2");
+        String shown = entries.get(0).newData().toString();
+        assertThat(shown).doesNotContain("password").doesNotContain("$2");
+        assertThat(shown).as("no client personal data in the audit API (ASR-005)")
+                .doesNotContain(email).doesNotContain("Test").contains("\"client_id\"");
     }
 
     @Test
@@ -158,7 +177,7 @@ class RequestWorkflowIntegrationTest {
     @DisplayName("Audit entries cannot be changed, even by a manager (ASR-003)")
     void auditTrailIsAppendOnly() {
         loginAs(LERATO, CurrentUser.Role.MANAGEMENT);
-        audit.search(null, null, null, PageRequest.of(0, 1)); // switches to the civicconnect_management role
+        audit.search(AuditResource.REQUESTS, null, null, PageRequest.of(0, 1)); // switches to the civicconnect_management role
 
         assertThrows(DataAccessException.class,
                 () -> jdbc.update("update audit_entry set operation = 'EDITED' where aud_id = (select min(aud_id) from audit_entry)"));
