@@ -103,9 +103,11 @@ export default function (data) {
 
 export function handleSummary(data) {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  // setup_data holds the login tokens from setup(); keep them out of the saved results
+  const { setup_data, ...results } = data;
   return {
     stdout: textSummary(data),
-    [`perf/results/request-list-${STRESS ? 'stress-' : ''}${stamp}.json`]: JSON.stringify(data, null, 2),
+    [`perf/results/request-list-${STRESS ? 'stress-' : ''}${stamp}.json`]: JSON.stringify(results, null, 2),
   };
 }
 

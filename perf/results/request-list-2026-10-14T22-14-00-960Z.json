@@ -223,61 +223,27 @@
       }
     }
   },
-  "setup_data": {
-    "categoryIds": [
-      2,
-      1,
-      4,
-      6,
-      5,
-      7,
-      8,
-      3
-    ],
-    "tokens": [
-      "eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJjaXZpY2Nvbm5lY3QiLCJzdWIiOiIxMSIsInJvbGUiOiJTVEFGRiIsImV4cCI6MTc5MjAxOTQxMCwiaWF0IjoxNzkyMDE1ODEwfQ.MDyDMjjnvXYZRcLuFhjfzdqinV9rrLwYp2kjpji-rL8",
-      "eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJjaXZpY2Nvbm5lY3QiLCJzdWIiOiIxMiIsInJvbGUiOiJTVEFGRiIsImV4cCI6MTc5MjAxOTQxMCwiaWF0IjoxNzkyMDE1ODEwfQ.UYieQdOaUtePWI0GZ55cpJ4yZsX5BNh9L3RuMGj98XQ",
-      "eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJjaXZpY2Nvbm5lY3QiLCJzdWIiOiIxMyIsInJvbGUiOiJTVEFGRiIsImV4cCI6MTc5MjAxOTQxMCwiaWF0IjoxNzkyMDE1ODEwfQ.2LnvVgcpFA7s_-yW8H5Po3Xie9-gM8biKqgw_t83_dc",
-      "eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJjaXZpY2Nvbm5lY3QiLCJzdWIiOiIxNCIsInJvbGUiOiJTVEFGRiIsImV4cCI6MTc5MjAxOTQxMCwiaWF0IjoxNzkyMDE1ODEwfQ.MEPPe-beAcEhwrQvM77tH679Vu6d8iYWLgSWMYSSX30",
-      "eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJjaXZpY2Nvbm5lY3QiLCJzdWIiOiIxNSIsInJvbGUiOiJTVEFGRiIsImV4cCI6MTc5MjAxOTQxMCwiaWF0IjoxNzkyMDE1ODEwfQ.aFFA1eHpfkGF2jpBYTkSQkwxJ47B8FIZaX6nFy8llzc",
-      "eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJjaXZpY2Nvbm5lY3QiLCJzdWIiOiIxNiIsInJvbGUiOiJTVEFGRiIsImV4cCI6MTc5MjAxOTQxMCwiaWF0IjoxNzkyMDE1ODEwfQ.6r_uMUo758JXAzT8riUCvZuK_UXEZME8b335YsuUrEw",
-      "eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJjaXZpY2Nvbm5lY3QiLCJzdWIiOiIxNyIsInJvbGUiOiJTVEFGRiIsImV4cCI6MTc5MjAxOTQxMCwiaWF0IjoxNzkyMDE1ODEwfQ.GxUTDJYZHbsgr7oq5rpN3u6uynO-LfpnPSwpI4xcfUk",
-      "eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJjaXZpY2Nvbm5lY3QiLCJzdWIiOiIxOCIsInJvbGUiOiJTVEFGRiIsImV4cCI6MTc5MjAxOTQxMCwiaWF0IjoxNzkyMDE1ODEwfQ.VSnI82XV6OUQ5jGjEPvOTvXmwaRm80FlXpEbWLVfC2I",
-      "eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJjaXZpY2Nvbm5lY3QiLCJzdWIiOiIxOSIsInJvbGUiOiJTVEFGRiIsImV4cCI6MTc5MjAxOTQxMSwiaWF0IjoxNzkyMDE1ODExfQ.UBHv7cfnC5xx34Q7DbwNhI3-YnrwjO_1MQPjmJVvZes",
-      "eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJjaXZpY2Nvbm5lY3QiLCJzdWIiOiIyMCIsInJvbGUiOiJTVEFGRiIsImV4cCI6MTc5MjAxOTQxMSwiaWF0IjoxNzkyMDE1ODExfQ.RQChhdG_IgjZ-HhdVW2nrPqxOoWVrELxtW3koWeN3vg",
-      "eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJjaXZpY2Nvbm5lY3QiLCJzdWIiOiIyMSIsInJvbGUiOiJTVEFGRiIsImV4cCI6MTc5MjAxOTQxMSwiaWF0IjoxNzkyMDE1ODExfQ.5_tRRR8nIjloeFWYFnXDhWf9bLTbtPl2z-xzzz95QzM",
-      "eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJjaXZpY2Nvbm5lY3QiLCJzdWIiOiIyMiIsInJvbGUiOiJTVEFGRiIsImV4cCI6MTc5MjAxOTQxMSwiaWF0IjoxNzkyMDE1ODExfQ.Z5HtBtPp_BSS9gLPQRG8qEBszK6osPmfk6uPvteYSbg",
-      "eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJjaXZpY2Nvbm5lY3QiLCJzdWIiOiIyMyIsInJvbGUiOiJTVEFGRiIsImV4cCI6MTc5MjAxOTQxMSwiaWF0IjoxNzkyMDE1ODExfQ.29ZtqLsYmvtEVtkwWvDlHm1UwdMq3g27COjOeQZUDuo",
-      "eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJjaXZpY2Nvbm5lY3QiLCJzdWIiOiIyNCIsInJvbGUiOiJTVEFGRiIsImV4cCI6MTc5MjAxOTQxMSwiaWF0IjoxNzkyMDE1ODExfQ._Ou-EgGfMGplvPEzeyt809PNRwM7Oc5sqS_3-O_twz4",
-      "eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJjaXZpY2Nvbm5lY3QiLCJzdWIiOiIyNSIsInJvbGUiOiJTVEFGRiIsImV4cCI6MTc5MjAxOTQxMSwiaWF0IjoxNzkyMDE1ODExfQ.UIND9IFeF34drmBiS9e8CQ3FnDcoXVrizfuVQoPQcUQ",
-      "eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJjaXZpY2Nvbm5lY3QiLCJzdWIiOiIyNiIsInJvbGUiOiJTVEFGRiIsImV4cCI6MTc5MjAxOTQxMSwiaWF0IjoxNzkyMDE1ODExfQ.-cGO6vM0-57NQn3KO6VsoUP3cUwEWMBkwry-DJmhP9g",
-      "eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJjaXZpY2Nvbm5lY3QiLCJzdWIiOiIyNyIsInJvbGUiOiJTVEFGRiIsImV4cCI6MTc5MjAxOTQxMSwiaWF0IjoxNzkyMDE1ODExfQ.IMv3JMzfECanpTlPdSae1YYaJChxovCuM7wl7sctKeI",
-      "eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJjaXZpY2Nvbm5lY3QiLCJzdWIiOiIyOCIsInJvbGUiOiJTVEFGRiIsImV4cCI6MTc5MjAxOTQxMSwiaWF0IjoxNzkyMDE1ODExfQ.GAXj8meKxo-qByVbD-ylTh2KqBLzjo2wnVOC--5LTWs",
-      "eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJjaXZpY2Nvbm5lY3QiLCJzdWIiOiIyOSIsInJvbGUiOiJTVEFGRiIsImV4cCI6MTc5MjAxOTQxMSwiaWF0IjoxNzkyMDE1ODExfQ.lwHrtt2v4I2QFKzR6lRA0k-XwE1VNgwvs3hl50GTl3g",
-      "eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJjaXZpY2Nvbm5lY3QiLCJzdWIiOiIzMCIsInJvbGUiOiJTVEFGRiIsImV4cCI6MTc5MjAxOTQxMSwiaWF0IjoxNzkyMDE1ODExfQ.xHTBCJHus_MTqhN_CNtLtHrrUSxZTiXUek_lcl6vFYE"
-    ]
-  },
   "root_group": {
     "name": "",
     "path": "",
     "id": "d41d8cd98f00b204e9800998ecf8427e",
     "groups": [],
     "checks": [
-        {
-          "passes": 1157,
-          "fails": 0,
-          "name": "status 200",
-          "path": "::status 200",
-          "id": "fad9fa412b86fcb03bee97c80dcd61f1"
-        },
-        {
-          "name": "page returned",
-          "path": "::page returned",
-          "id": "73e4c0e9b439d3d34f1358d80e66e129",
-          "passes": 1157,
-          "fails": 0
-        }
-      ]
+      {
+        "passes": 1157,
+        "fails": 0,
+        "name": "status 200",
+        "path": "::status 200",
+        "id": "fad9fa412b86fcb03bee97c80dcd61f1"
+      },
+      {
+        "name": "page returned",
+        "path": "::page returned",
+        "id": "73e4c0e9b439d3d34f1358d80e66e129",
+        "passes": 1157,
+        "fails": 0
+      }
+    ]
   },
   "options": {
     "summaryTrendStats": [
