@@ -9,13 +9,14 @@ import org.hibernate.annotations.Immutable;
 import java.time.LocalDateTime;
 
 /**
- * One row-level change written by the audit trigger in the database (DEC-007).
+ * One row-level change written by the audit trigger in the database (DEC-007), read through the
+ * audit_log view (V6), which hides client personal values and limits staff to request history.
  * The application only reads this table - @Immutable, no setters - and the database blocks UPDATE and
  * DELETE. The actor columns are plain IDs so the Reporting module does not depend on Access entities.
  */
 @Entity
 @Immutable
-@Table(name = "audit_entry")
+@Table(name = "audit_log")
 public class AuditEntry {
 
     @Id

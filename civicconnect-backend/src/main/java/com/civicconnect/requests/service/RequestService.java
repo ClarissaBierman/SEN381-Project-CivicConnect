@@ -195,8 +195,9 @@ public class RequestService {
     }
 
     /**
-     * API-08: staff accept a New request themselves; managers assign or reassign any active handler
-     * who covers the category (FR-008). Only one active handler is allowed - the row lock serialises
+     * API-08: staff accept a New request themselves (only New - an In Progress request that lost its
+     * handler is reassigned by a manager); managers assign or reassign any active handler who covers the
+     * category (FR-008). Only one active handler is allowed - the row lock serialises
      * two accepts on the same request, and the database's partial unique index is the final guard.
      */
     @Transactional
@@ -237,6 +238,11 @@ public class RequestService {
 
         LocalDateTime now = Time.now();
         RequestHandler current = requestHandlerRepository.findActive(id).orElse(null);
+        if (current == null && user.isStaff() && status != Status.NEW) {
+            // An In Progress request whose handler was removed waits for a manager (HandlerRemovalListener)
+            throw Errors.rule(ErrorCode.INVALID_TRANSITION,
+                    "Staff can only accept New requests. A manager reassigns requests that are already in progress.");
+        }
         if (current != null) {
             if (user.isStaff()) {
                 throw Errors.conflict(ErrorCode.ALREADY_ASSIGNED, "This request is already assigned.");

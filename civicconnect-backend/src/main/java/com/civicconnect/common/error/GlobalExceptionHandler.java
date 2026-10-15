@@ -1,5 +1,6 @@
 package com.civicconnect.common.error;
 
+import com.civicconnect.common.logging.LogSafe;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -69,13 +70,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         if (message.contains("ux_request_handler_active")) {
             return respond(ErrorCode.ALREADY_ASSIGNED, 409, "This request is already assigned.", request, null);
         }
-        log.warn("Data integrity violation on {}: {}", request.getRequestURI(), message);
+        log.warn("Data integrity violation on {}: {}", LogSafe.of(request.getRequestURI()), LogSafe.of(message));
         return respond(ErrorCode.CONFLICT, 409, "This change conflicts with existing data.", request, null);
     }
 
     @ExceptionHandler({CannotCreateTransactionException.class, DataAccessResourceFailureException.class})
     public ResponseEntity<Object> handleDatabaseDown(Exception ex, HttpServletRequest request) {
-        log.error("Database unavailable on {}", request.getRequestURI(), ex);
+        log.error("Database unavailable on {}", LogSafe.of(request.getRequestURI()), ex);
         return respond(ErrorCode.SERVICE_UNAVAILABLE, 503,
                 "The service is temporarily unavailable. Please try again later.", request, null);
     }
@@ -92,7 +93,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Object> handleUnexpected(Exception ex, HttpServletRequest request) {
-        log.error("Unexpected error on {} {}", request.getMethod(), request.getRequestURI(), ex);
+        log.error("Unexpected error on {} {}", LogSafe.of(request.getMethod()), LogSafe.of(request.getRequestURI()), ex);
         return respond(ErrorCode.INTERNAL_ERROR, 500, "Something went wrong. Please try again.", request, null);
     }
 

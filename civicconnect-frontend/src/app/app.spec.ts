@@ -32,6 +32,6 @@ describe('App shell', () => {
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
     const links = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('nav a')).map((a) => a.textContent?.trim());
-    expect(links).toEqual(['Activity', 'Requests', 'Categories', 'Staff', 'Audit']);
+    expect(links).toEqual(['Activity', 'Requests', 'Categories', 'Staff', 'Audit', 'My account']);
   });
 });

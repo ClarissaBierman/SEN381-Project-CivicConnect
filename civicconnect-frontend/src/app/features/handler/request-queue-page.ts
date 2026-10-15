@@ -41,6 +41,10 @@ export class RequestQueuePage implements OnInit {
   // Each click cancels the previous request's loads, so detail, history and handler list always
   // belong to the last request clicked
   private readonly selection = new Subject<number>();
+  // Each list reload cancels the previous one, so an older, slower response cannot replace a newer page
+  private readonly listLoads = new Subject<void>();
+  // The request the user last clicked (the detail may still be loading)
+  private selectedId: number | null = null;
   protected readonly session = inject(SessionService);
 
   protected readonly statusLabels = STATUS_LABELS;
@@ -116,6 +120,33 @@ export class RequestQueuePage implements OnInit {
         this.toStatus = null; // no status pre-selected: the user picks one (bug 4)
         this.assignTo = null;
       });
+    this.listLoads
+      .pipe(
+        switchMap(() => {
+          const f = this.filters.getRawValue();
+          // Marker 1: FR-005 - the server only returns requests in this handler's categories (API-07).
+          return this.api
+            .getRequests({
+              status: f.status || null,
+              categoryId: Number(f.categoryId) || null,
+              from: f.from || null,
+              to: f.to || null,
+              sort: f.sort,
+              page: this.pageIndex(),
+              size: PAGE_SIZE,
+            })
+            .pipe(
+              catchError((p) => {
+                this.detailError.set(problemMessage(p));
+                return of(null);
+              }),
+            );
+        }),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((page) => {
+        if (page) this.result.set(page);
+      });
     this.filters.valueChanges.pipe(debounceTime(200), takeUntilDestroyed(this.destroyRef)).subscribe(() => {
       this.pageIndex.set(0);
       this.loadList();
@@ -132,12 +163,15 @@ export class RequestQueuePage implements OnInit {
     this.note = '';
     this.noteVisibleToRequester = false;
     // Detail + audit are two calls (API-06, API-11) - the trade-off noted for the DTO decision.
+    this.selectedId = id;
     this.selection.next(id);
   }
 
-  // Managers assign or reassign any open request; staff accept unassigned ones (API-08)
+  // Managers assign or reassign any open request; staff accept New, unassigned ones (API-08). An In
+  // Progress request whose handler was removed waits for a manager (D-23).
   protected canAssign(d: RequestDetail): boolean {
-    return ASSIGNABLE.includes(d.status) && (this.isManager() || d.handlerId === null);
+    if (this.isManager()) return ASSIGNABLE.includes(d.status);
+    return d.status === 'NEW' && d.handlerId === null;
   }
 
   // Marker 5: FR-009 / API-09 - only allowedTransitions are offered; the server still returns 422 for illegal moves.
@@ -203,7 +237,8 @@ export class RequestQueuePage implements OnInit {
     return statuses.map((s) => STATUS_LABELS[s]).join(', ');
   }
 
-  // Every write reloads detail + audit so the screen shows the latest state.
+  // Every write reloads the list, and the detail + audit if that request is still the one selected - if
+  // the user clicked another row meanwhile, their new selection is kept.
   private run(call: Observable<unknown>): void {
     const id = this.detail()!.id;
     this.busy.set(true);
@@ -211,7 +246,7 @@ export class RequestQueuePage implements OnInit {
     call.subscribe({
       next: () => {
         this.busy.set(false);
-        this.open(id);
+        if (this.selectedId === id) this.open(id);
         this.loadList();
       },
       error: (p) => {
@@ -222,21 +257,6 @@ export class RequestQueuePage implements OnInit {
   }
 
   private loadList(): void {
-    const f = this.filters.getRawValue();
-    // Marker 1: FR-005 - the server only returns requests in this handler's categories (API-07).
-    this.api
-      .getRequests({
-        status: f.status || null,
-        categoryId: Number(f.categoryId) || null,
-        from: f.from || null,
-        to: f.to || null,
-        sort: f.sort,
-        page: this.pageIndex(),
-        size: PAGE_SIZE,
-      })
-      .subscribe({
-        next: (page) => this.result.set(page),
-        error: (p) => this.detailError.set(problemMessage(p)),
-      });
+    this.listLoads.next();
   }
 }

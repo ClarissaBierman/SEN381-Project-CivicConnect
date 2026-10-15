@@ -5,14 +5,15 @@ import com.civicconnect.access.domain.Employee;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Past;
+import com.civicconnect.common.validation.NotBlankIfPresent;
 import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
 
 public record EmployeePatch(
-        @Size(min = 1, max = 100) String firstName,
-        @Size(min = 1, max = 100) String surname,
-        @Email @Size(max = 255) String email,
+        @NotBlankIfPresent @Size(max = 100) String firstName,
+        @NotBlankIfPresent @Size(max = 100) String surname,
+        @NotBlankIfPresent @Email @Size(max = 255) String email,
         @Size(min = 8, max = 72) @MaxBytes(72) String password,
         @Size(max = 30) String phone,
         Employee.Role role,

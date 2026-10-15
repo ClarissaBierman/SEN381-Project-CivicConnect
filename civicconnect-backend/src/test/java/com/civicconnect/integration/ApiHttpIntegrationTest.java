@@ -2,6 +2,7 @@ package com.civicconnect.integration;
 
 import com.civicconnect.common.security.CurrentUser;
 import com.civicconnect.common.security.JwtService;
+import com.jayway.jsonpath.JsonPath;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.junit.jupiter.api.DisplayName;
@@ -212,11 +213,14 @@ class ApiHttpIntegrationTest {
     @Test
     @DisplayName("The activity report (API-17) returns counts only")
     void activityReport() throws Exception {
-        call(get("/api/v1/reports/activity?from=2020-01-01"), manager(LERATO))
+        String body = call(get("/api/v1/reports/activity?from=2020-01-01"), manager(LERATO))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.totals.total").value(12))
                 .andExpect(jsonPath("$.byCategory[0].categoryName").exists())
-                .andExpect(content().string(not(containsString("description"))));
+                .andExpect(content().string(not(containsString("description"))))
+                .andReturn().getResponse().getContentAsString();
+        // Compared with the database itself, so the test still holds on a database with more than the dummy data
+        int requests = jdbc.queryForObject("select count(*) from request where created_at >= '2020-01-01'", Integer.class);
+        assertThat(JsonPath.<Integer>read(body, "$.totals.total")).isEqualTo(requests);
     }
 
     @Test
@@ -305,14 +309,21 @@ class ApiHttpIntegrationTest {
     @Test
     @DisplayName("open=true and unassigned=true filters")
     void openAndUnassignedFilters() throws Exception {
-        // Seed data: open and unassigned are requests 1, 2 and 11
-        call(get("/api/v1/requests?open=true&unassigned=true&sort=refNum,asc"), manager(LERATO))
+        // Dummy data: the oldest open and unassigned requests are 1, 2 and 11. Totals are compared with the
+        // database itself, so the test still holds on a database with more than the dummy data.
+        String unassigned = call(get("/api/v1/requests?open=true&unassigned=true&sort=refNum,asc"), manager(LERATO))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.page.totalElements").value(3))
                 .andExpect(jsonPath("$.content[0].id").value(1))
-                .andExpect(jsonPath("$.content[2].id").value(11));
-        call(get("/api/v1/requests?open=true"), manager(LERATO))
-                .andExpect(jsonPath("$.page.totalElements").value(7));
+                .andExpect(jsonPath("$.content[2].id").value(11))
+                .andReturn().getResponse().getContentAsString();
+        String open = call(get("/api/v1/requests?open=true"), manager(LERATO))
+                .andReturn().getResponse().getContentAsString();
+        String openStatuses = "r.status in ('NEW', 'ASSIGNED', 'IN_PROGRESS')";
+        assertThat(JsonPath.<Integer>read(unassigned, "$.page.totalElements")).isEqualTo(jdbc.queryForObject(
+                "select count(*) from request r where " + openStatuses + " and not exists "
+                        + "(select 1 from request_handler h where h.req_id = r.req_id and h.unassigned_at is null)", Integer.class));
+        assertThat(JsonPath.<Integer>read(open, "$.page.totalElements"))
+                .isEqualTo(jdbc.queryForObject("select count(*) from request r where " + openStatuses, Integer.class));
     }
 
     @Test
@@ -355,5 +366,116 @@ class ApiHttpIntegrationTest {
     void inactiveCategoryHidden() throws Exception {
         call(get("/api/v1/categories/8"), requester(THABO)).andExpect(status().isNotFound());
         call(get("/api/v1/categories/8"), manager(LERATO)).andExpect(status().isOk());
+    }
+
+    // ------------------------------------------------------------------ M3 code review fixes (D-18 to D-26)
+
+    @Test
+    @DisplayName("D-18: a requester can change their email (was a 500: their role could not read employee emails)")
+    void requesterChangesEmail() throws Exception {
+        call(patch("/api/v1/clients/me").content(
+                "{\"email\":\"thabo.new@example.com\",\"currentPassword\":\"Password123!\"}"), requester(THABO))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("thabo.new@example.com"));
+        // An address an employee already uses is still refused, with a 409 and not a 500
+        call(patch("/api/v1/clients/me").content(
+                "{\"email\":\"johan.vanwyk@civicconnect.example\",\"currentPassword\":\"Password123!\"}"), requester(THABO))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CONFLICT"));
+    }
+
+    @Test
+    @DisplayName("D-25: registering a taken email gets exactly the same answer as a new one, and creates nothing")
+    void registrationDoesNotRevealAccounts() throws Exception {
+        String body = "{\"firstName\":\"A\",\"surname\":\"B\",\"email\":\"%s\",\"password\":\"Secret123!\"}";
+        String fresh = call(post("/api/v1/auth/register").content(body.formatted("brand.new@example.com")), null)
+                .andExpect(status().isAccepted())
+                .andReturn().getResponse().getContentAsString();
+        String taken = call(post("/api/v1/auth/register").content(body.formatted("johan.vanwyk@civicconnect.example")), null)
+                .andExpect(status().isAccepted())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(taken).isEqualTo(fresh).contains("log in");
+        assertThat(jdbc.queryForObject("select count(*) from client where email = 'johan.vanwyk@civicconnect.example'",
+                Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("select count(*) from client where email = 'brand.new@example.com'",
+                Integer.class)).isOne();
+    }
+
+    @Test
+    @DisplayName("D-26: staff change their own password (current one required), are the audit actor, and can log in with it")
+    void staffChangeOwnPassword() throws Exception {
+        call(patch("/api/v1/employees/me/password").content(
+                "{\"currentPassword\":\"wrong-one\",\"password\":\"NewPass123!\"}"), staff(JOHAN))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("currentPassword"));
+        call(patch("/api/v1/employees/me/password").content(
+                "{\"currentPassword\":\"Password123!\",\"password\":\"NewPass123!\"}"), staff(JOHAN))
+                .andExpect(status().isNoContent());
+
+        call(post("/api/v1/auth/login").content(
+                "{\"email\":\"johan.vanwyk@civicconnect.example\",\"password\":\"NewPass123!\"}"), null)
+                .andExpect(status().isOk());
+        call(get("/api/v1/audit/employees?recordId=" + JOHAN + "&operation=UPDATE"), manager(LERATO))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].changedFields[0]").value("password"))
+                .andExpect(jsonPath("$.content[0].empId").value(JOHAN))
+                .andExpect(content().string(not(containsString("$2"))));
+        // Staff still cannot change anyone else's account
+        call(patch("/api/v1/employees/" + AYESHA).content("{\"password\":\"Hacked123!\"}"), staff(JOHAN))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("D-23: staff cannot claim an In Progress request that lost its handler; a manager reassigns it")
+    void orphanedInProgressNeedsManager() throws Exception {
+        call(patch("/api/v1/employees/" + JOHAN).content("{\"active\":false}"), manager(LERATO)).andExpect(status().isOk());
+        call(put("/api/v1/employees/" + AYESHA + "/categories").content("{\"categoryIds\":[2,4,5]}"), manager(LERATO))
+                .andExpect(status().isOk());
+
+        call(post("/api/v1/requests/5/assignment"), staff(AYESHA))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("INVALID_TRANSITION"));
+        call(post("/api/v1/requests/5/assignment").content("{\"employeeId\":" + AYESHA + "}"), manager(LERATO))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("IN_PROGRESS"))
+                .andExpect(jsonPath("$.handlerId").value(AYESHA));
+    }
+
+    @Test
+    @DisplayName("D-22, D-34: names that are only spaces and empty emails are refused")
+    void blankNamesRefused() throws Exception {
+        call(patch("/api/v1/clients/me").content("{\"firstName\":\"   \"}"), requester(THABO))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("firstName"));
+        call(patch("/api/v1/categories/7").content("{\"catName\":\"  \"}"), manager(LERATO))
+                .andExpect(status().isBadRequest());
+        // D-34: an empty email used to be saved and lock the account out
+        call(patch("/api/v1/clients/me").content("{\"email\":\"\",\"currentPassword\":\"Password123!\"}"), requester(THABO))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("email"));
+    }
+
+    // ------------------------------------------------------------------ ARC-03 single jar (C-07)
+
+    @Test
+    @DisplayName("ARC-03: the health check is public; Angular routes get index.html; /api paths never do")
+    void singleJarServing() throws Exception {
+        call(get("/api/v1/health"), null)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"));
+        // A refresh on an Angular route (no token: the page itself is public, the data is not)
+        call(get("/staff/requests"), null)
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("<app-root>")));
+        call(get("/"), null)                      // Spring Boot's welcome page forwards to index.html
+                .andExpect(status().isOk())
+                .andExpect(forwardedUrl("index.html"));
+        // Data still needs a token, and unknown API paths or files are a 404, not the app
+        call(get("/api/v1/requests"), null).andExpect(status().isUnauthorized());
+        call(get("/api/v1/no-such-endpoint"), manager(LERATO))
+                .andExpect(status().isNotFound())
+                .andExpect(content().string(not(containsString("<app-root>"))));
+        call(get("/missing-file.js"), null).andExpect(status().isNotFound());
     }
 }

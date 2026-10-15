@@ -1,6 +1,5 @@
 package com.civicconnect.integration;
 
-import com.civicconnect.access.dto.ClientResponse;
 import com.civicconnect.access.dto.RegisterRequest;
 import com.civicconnect.access.service.AuthService;
 import com.civicconnect.common.error.ErrorCode;
@@ -21,6 +20,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.domain.PageRequest;
@@ -30,6 +30,10 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.List;
 import java.util.UUID;
 
@@ -60,6 +64,9 @@ class RequestWorkflowIntegrationTest {
     @Autowired private AuditService audit;
     @Autowired private AuthService auth;
     @Autowired private JdbcTemplate jdbc;
+    @Value("${spring.datasource.url}") private String dbUrl;
+    @Value("${spring.flyway.user}") private String ownerUser;
+    @Value("${spring.flyway.password}") private String ownerPassword;
 
     /** Pretends a user is logged in, exactly as a verified token would. */
     private void loginAs(long id, CurrentUser.Role role) {
@@ -136,16 +143,17 @@ class RequestWorkflowIntegrationTest {
     @DisplayName("Registering stores a hash and the audit trail never contains the password")
     void registrationNeverLeaksPassword() {
         String email = "it-" + UUID.randomUUID() + "@example.com";
-        ClientResponse client = auth.register(new RegisterRequest("Test", "User", email, null, "Secret123!"));
+        auth.register(new RegisterRequest("Test", "User", email, null, "Secret123!"));
+        long clientId = jdbc.queryForObject("select client_id from client where email = ?", Long.class, email);
 
-        String stored = jdbc.queryForObject("select password from client where client_id = ?", String.class, client.id());
+        String stored = jdbc.queryForObject("select password from client where client_id = ?", String.class, clientId);
         assertThat(stored).startsWith("$2").doesNotContain("Secret123!");
 
         loginAs(LERATO, CurrentUser.Role.MANAGEMENT);
-        var entries = audit.search(AuditResource.CLIENTS, String.valueOf(client.id()), "INSERT", PageRequest.of(0, 5))
+        var entries = audit.search(AuditResource.CLIENTS, String.valueOf(clientId), "INSERT", PageRequest.of(0, 5))
                 .getContent();
         assertThat(entries).hasSize(1);
-        assertThat(entries.get(0).clientId()).as("the new client is the actor").isEqualTo(client.id());
+        assertThat(entries.get(0).clientId()).as("the new client is the actor").isEqualTo(clientId);
         String shown = entries.get(0).newData().toString();
         assertThat(shown).doesNotContain("password").doesNotContain("$2");
         assertThat(shown).as("no client personal data in the audit API (ASR-005)")
@@ -174,12 +182,38 @@ class RequestWorkflowIntegrationTest {
     }
 
     @Test
-    @DisplayName("Audit entries cannot be changed, even by a manager (ASR-003)")
-    void auditTrailIsAppendOnly() {
+    @DisplayName("A manager's database role cannot touch the audit table at all (V6)")
+    void managerCannotChangeAuditEntries() {
         loginAs(LERATO, CurrentUser.Role.MANAGEMENT);
         audit.search(AuditResource.REQUESTS, null, null, PageRequest.of(0, 1)); // switches to the civicconnect_management role
 
         assertThrows(DataAccessException.class,
                 () -> jdbc.update("update audit_entry set operation = 'EDITED' where aud_id = (select min(aud_id) from audit_entry)"));
+    }
+
+    /**
+     * D-35: since V6 no application role may write to audit_entry, so a test as a manager is refused by a missing
+     * grant before the trigger runs. This one connects as the schema owner, who has every right, so only the
+     * append-only triggers can refuse - it fails if a trigger is missing or disabled.
+     */
+    @Test
+    @DisplayName("Audit entries and notes cannot be changed or deleted, not even by the schema owner (ASR-003, FR-010)")
+    void auditTrailAndNotesAreAppendOnly() throws SQLException {
+        try (Connection owner = DriverManager.getConnection(dbUrl, ownerUser, ownerPassword)) {
+            owner.setAutoCommit(false);
+            for (String sql : List.of(
+                    "update civicconnect.audit_entry set operation = 'EDITED' where aud_id = (select min(aud_id) from civicconnect.audit_entry)",
+                    "delete from civicconnect.audit_entry where aud_id = (select min(aud_id) from civicconnect.audit_entry)",
+                    "update civicconnect.comment set content = 'edited' where com_id = (select min(com_id) from civicconnect.comment)",
+                    "delete from civicconnect.comment where com_id = (select min(com_id) from civicconnect.comment)")) {
+                SQLException refused = assertThrows(SQLException.class, () -> {
+                    try (Statement st = owner.createStatement()) {
+                        st.executeUpdate(sql);
+                    }
+                }, sql);
+                assertThat(refused.getMessage()).as(sql).contains("append-only");
+                owner.rollback();
+            }
+        }
     }
 }

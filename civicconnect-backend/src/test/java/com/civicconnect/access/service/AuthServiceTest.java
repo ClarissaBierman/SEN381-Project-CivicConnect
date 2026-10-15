@@ -3,7 +3,7 @@ package com.civicconnect.access.service;
 import com.civicconnect.access.domain.Client;
 import com.civicconnect.access.domain.Employee;
 import com.civicconnect.access.dto.AuthResponse;
-import com.civicconnect.access.dto.ClientResponse;
+import com.civicconnect.access.dto.RegistrationResponse;
 import com.civicconnect.access.dto.LoginRequest;
 import com.civicconnect.access.dto.RegisterRequest;
 import com.civicconnect.access.repository.ClientRepository;
@@ -79,7 +79,7 @@ class AuthServiceTest {
     @Test
     @DisplayName("Registration stores a BCrypt hash, never the plain password (NFR-002)")
     void registerHashesPassword() {
-        ClientResponse response = service.register(
+        RegistrationResponse response = service.register(
                 new RegisterRequest("Lindi", "Zulu", "  Lindi@Example.COM ", null, "Secret123!"));
 
         ArgumentCaptor<Client> saved = ArgumentCaptor.forClass(Client.class);
@@ -87,17 +87,23 @@ class AuthServiceTest {
         assertThat(saved.getValue().getPassword()).isNotEqualTo("Secret123!").startsWith("$2");
         assertThat(encoder.matches("Secret123!", saved.getValue().getPassword())).isTrue();
         assertThat(saved.getValue().getEmail()).isEqualTo("lindi@example.com");
-        assertThat(response.id()).isEqualTo(42L);
+        assertThat(response).isEqualTo(RegistrationResponse.accepted());
     }
 
     @Test
-    @DisplayName("An email already used by an employee cannot be registered")
-    void registerRejectsDuplicateEmail() {
-        when(employees.existsByEmailIgnoreCase("taken@example.com")).thenReturn(true);
+    @DisplayName("A taken email gets the same answer as a new one, costs one hash too, and creates nothing (D-25)")
+    void registerSameAnswerForTakenEmail() {
+        when(clients.emailInUse("taken@example.com")).thenReturn(true);
+        PasswordEncoder spy = spy(encoder);
+        AuthService timed = new AuthService(clients, employees, spy, mock(JwtService.class), mock(CurrentUserService.class),
+                loginLimiter, new TokenBucketLimiter(5, Duration.ofHours(1), clock));
 
-        assertApiError(ErrorCode.CONFLICT,
-                () -> service.register(new RegisterRequest("A", "B", "taken@example.com", null, "Secret123!")));
-        verify(clients, never()).save(any());
+        RegistrationResponse taken = timed.register(new RegisterRequest("A", "B", "taken@example.com", null, "Secret123!"));
+        RegistrationResponse fresh = timed.register(new RegisterRequest("A", "B", "new@example.com", null, "Secret123!"));
+
+        assertThat(taken).isEqualTo(fresh);
+        verify(clients, times(1)).save(any());
+        verify(spy, times(2)).encode("Secret123!");
     }
 
     @Test
@@ -191,10 +197,10 @@ class AuthServiceTest {
     @Test
     @DisplayName("Registration is limited to 5 attempts per email address per hour")
     void registrationLimitedPerEmail() {
-        when(clients.existsByEmailIgnoreCase("spam@example.com")).thenReturn(true);
+        when(clients.emailInUse("spam@example.com")).thenReturn(true);
         for (int i = 0; i < 5; i++) {
-            assertApiError(ErrorCode.CONFLICT,
-                    () -> service.register(new RegisterRequest("A", "B", "spam@example.com", null, "Secret123!")));
+            assertThat(service.register(new RegisterRequest("A", "B", "spam@example.com", null, "Secret123!")))
+                    .isEqualTo(RegistrationResponse.accepted());
         }
         assertApiError(ErrorCode.TOO_MANY_REQUESTS,
                 () -> service.register(new RegisterRequest("A", "B", "SPAM@example.com", null, "Secret123!")));

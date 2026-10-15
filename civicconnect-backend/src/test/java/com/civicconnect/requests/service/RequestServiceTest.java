@@ -305,6 +305,16 @@ class RequestServiceTest {
     }
 
     @Test
+    @DisplayName("Staff cannot claim an In Progress request that lost its handler; a manager reassigns it")
+    void staffCannotClaimOrphanedInProgress() {
+        loggedInAs(staff(3));
+        existing(10, Status.IN_PROGRESS); // no active handler: the previous one was removed
+
+        assertApiError(ErrorCode.INVALID_TRANSITION, () -> service.assign(10L, null));
+        verify(handlerRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("Staff cannot assign a request to someone else")
     void staffCannotAssignOthers() {
         loggedInAs(staff(3));

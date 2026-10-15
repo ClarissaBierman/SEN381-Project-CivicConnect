@@ -6,7 +6,6 @@ import com.civicconnect.access.dto.ClientContactResponse;
 import com.civicconnect.access.dto.ClientPatch;
 import com.civicconnect.access.dto.ClientResponse;
 import com.civicconnect.access.repository.ClientRepository;
-import com.civicconnect.access.repository.EmployeeRepository;
 import com.civicconnect.common.error.ErrorCode;
 import com.civicconnect.common.error.Errors;
 import com.civicconnect.common.ratelimit.LoginAttemptLimiter;
@@ -27,16 +26,13 @@ public class ClientService {
     private static final Logger log = LoggerFactory.getLogger(ClientService.class);
 
     private final ClientRepository clientRepository;
-    private final EmployeeRepository employeeRepository;
     private final PasswordEncoder passwordEncoder;
     private final CurrentUserService currentUser;
     private final LoginAttemptLimiter loginLimiter;
 
-    public ClientService(ClientRepository clientRepository, EmployeeRepository employeeRepository,
-                         PasswordEncoder passwordEncoder, CurrentUserService currentUser,
-                         LoginAttemptLimiter loginLimiter) {
+    public ClientService(ClientRepository clientRepository, PasswordEncoder passwordEncoder,
+                         CurrentUserService currentUser, LoginAttemptLimiter loginLimiter) {
         this.clientRepository = clientRepository;
-        this.employeeRepository = employeeRepository;
         this.passwordEncoder = passwordEncoder;
         this.currentUser = currentUser;
         this.loginLimiter = loginLimiter;
@@ -60,7 +56,7 @@ public class ClientService {
         }
 
         if (emailChanges) {
-            if (clientRepository.existsByEmailIgnoreCase(newEmail) || employeeRepository.existsByEmailIgnoreCase(newEmail)) {
+            if (clientRepository.emailInUse(newEmail)) {
                 throw Errors.conflict(ErrorCode.CONFLICT, "This email address is already in use.");
             }
             c.setEmail(newEmail);

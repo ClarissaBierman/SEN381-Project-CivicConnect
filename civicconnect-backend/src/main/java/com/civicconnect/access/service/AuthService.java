@@ -4,14 +4,13 @@ import com.civicconnect.common.web.Text;
 import com.civicconnect.access.domain.Client;
 import com.civicconnect.access.domain.Employee;
 import com.civicconnect.access.dto.AuthResponse;
-import com.civicconnect.access.dto.ClientResponse;
 import com.civicconnect.access.dto.LoginRequest;
 import com.civicconnect.access.dto.MeResponse;
 import com.civicconnect.access.dto.RegisterRequest;
+import com.civicconnect.access.dto.RegistrationResponse;
 import com.civicconnect.access.repository.ClientRepository;
 import com.civicconnect.access.repository.EmployeeRepository;
 import com.civicconnect.common.error.ApiException;
-import com.civicconnect.common.error.ErrorCode;
 import com.civicconnect.common.error.Errors;
 import com.civicconnect.common.ratelimit.LoginAttemptLimiter;
 import com.civicconnect.common.ratelimit.RateLimitedException;
@@ -61,25 +60,32 @@ public class AuthService {
         this.dummyHash = passwordEncoder.encode(UUID.randomUUID().toString());
     }
 
+    /**
+     * API-01. A new and an already registered email address get the same answer and take about the same
+     * time (one BCrypt hash either way), so registration does not reveal who has an account (D-25).
+     * The cost: someone who forgot they registered is told to log in instead of "already registered".
+     */
     @Transactional
     @AppRoleOnly
-    public ClientResponse register(RegisterRequest body) {
+    public RegistrationResponse register(RegisterRequest body) {
         String email = body.email().trim().toLowerCase(Locale.ROOT);
         long retryAfter = registrationLimiter.tryConsume(email);
         if (retryAfter > 0) {
             throw new RateLimitedException("Too many registration attempts for this email address. Please try again later.",
                     retryAfter);
         }
-        if (clientRepository.existsByEmailIgnoreCase(email) || employeeRepository.existsByEmailIgnoreCase(email)) {
-            throw Errors.conflict(ErrorCode.CONFLICT, "This email address is already registered.");
+        String hash = passwordEncoder.encode(body.password());
+        if (clientRepository.emailInUse(email)) {
+            return RegistrationResponse.accepted();
         }
         Client client = new Client();
         client.setFirstName(body.firstName().trim());
         client.setSurname(body.surname().trim());
         client.setEmail(email);
         client.setPhone(Text.blankToNull(body.phone()));
-        client.setPassword(passwordEncoder.encode(body.password()));
-        return ClientResponse.from(clientRepository.save(client));
+        client.setPassword(hash);
+        clientRepository.save(client);
+        return RegistrationResponse.accepted();
     }
 
     /**

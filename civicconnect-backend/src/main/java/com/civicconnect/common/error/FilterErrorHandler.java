@@ -1,5 +1,6 @@
 package com.civicconnect.common.error;
 
+import com.civicconnect.common.logging.LogSafe;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -43,11 +44,13 @@ public class FilterErrorHandler extends OncePerRequestFilter {
             }
             response.resetBuffer();
             if (isDatabaseUnavailable(e)) {
-                log.warn("Database unavailable during {} {}: {}", request.getMethod(), request.getRequestURI(), e.toString());
+                log.warn("Database unavailable during {} {}: {}", LogSafe.of(request.getMethod()), LogSafe.of(request.getRequestURI()),
+                        LogSafe.of(e));
                 writer.write(response, ErrorCode.SERVICE_UNAVAILABLE,
                         "The service is temporarily unavailable. Please try again later.", request);
             } else {
-                log.error("Unhandled error in the filter chain for {} {}", request.getMethod(), request.getRequestURI(), e);
+                log.error("Unhandled error in the filter chain for {} {}", LogSafe.of(request.getMethod()),
+                        LogSafe.of(request.getRequestURI()), e);
                 writer.write(response, ErrorCode.INTERNAL_ERROR, "Something went wrong. Please try again.", request);
             }
         }

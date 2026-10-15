@@ -15,7 +15,7 @@ public interface AuditRepository extends JpaRepository<AuditEntry, Long> {
      * and handler assignments (those rows carry req_id in their JSON data). Oldest first.
      */
     @Query(value = """
-            select * from audit_entry a
+            select * from audit_log a
             where (a.table_name = 'request' and a.record_id = :reqId)
                or (a.table_name in ('comment', 'request_handler')
                    and cast(coalesce(a.new_data, a.old_data) as jsonb) ->> 'req_id' = :reqId)
