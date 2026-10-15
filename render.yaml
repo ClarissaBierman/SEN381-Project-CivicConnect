@@ -9,15 +9,16 @@ services:
     runtime: docker
     plan: free                     # 512 MB, 0.1 CPU; sleeps after 15 minutes without traffic
     branch: prod
-    region: frankfurt              # pick the region closest to the Supabase project - cannot be changed later
+    region: frankfurt              # the Render region closest to the production Supabase project (London,
+                                   # eu-west-2); Render has no UK or African region. Cannot be changed later.
     dockerfilePath: ./Dockerfile
     dockerContext: .
     healthCheckPath: /api/v1/health
     autoDeployTrigger: checksPass
     envVars:
       # Secrets: Render asks for these when the Blueprint is first created. Never commit them.
-      - key: DB_URL                # Supabase session pooler (IPv4), e.g.
-        sync: false                # jdbc:postgresql://aws-0-<region>.pooler.supabase.com:5432/postgres?sslmode=require
+      - key: DB_URL                # Supabase session pooler (IPv4) - copy the host from Supabase > Connect, e.g.
+        sync: false                # jdbc:postgresql://aws-1-eu-west-2.pooler.supabase.com:5432/postgres?sslmode=require
       - key: DB_USERNAME           # civicconnect_app.<project-ref>
         sync: false
       - key: DB_PASSWORD           # civicconnect_app's password

@@ -36,21 +36,26 @@ database behind the public site (D-31). Integration tests only run against a loc
 
 ### 2. Create the production database
 
-1. Supabase > **New project** in your organization. Pick the region closest to Render's Frankfurt
-   region (Europe Central, Frankfurt) unless you change `region` in `render.yaml`. Generate a strong
-   database password and keep it in a password manager - it is the `FLYWAY_PASSWORD`.
+1. Supabase > **New project** in your organization. The team's production project is in **West EU
+   (London, eu-west-2)**, about 15 ms from Render's Frankfurt region. A project in South Africa (Cape
+   Town) would keep the data in the country but add 150-200 ms to every query, because Render has no
+   African region (see "Latency" below). Generate a strong database password and keep it in a password
+   manager - it is the `FLYWAY_PASSWORD`.
 2. Wait until the project is ready, open **SQL Editor > New query**, paste the whole of
    `civicconnect-backend/database/civicconnect_production_build.sql`, and replace
    `CHANGE_ME_to_a_long_random_password` with a new random password for `civicconnect_app` - this is
-   the `DB_PASSWORD`. Run it. It ends with `COMMIT` and shows "Success".
+   the `DB_PASSWORD`. Run it. It ends with `COMMIT` and shows "Success". Only `civicconnect_app` can
+   log in; the other three roles have no login, so they have no password to set. Never reuse a password
+   that appears anywhere in the repository (such as the old default admin password): the pooler accepts
+   logins from the whole internet. To change it later: `ALTER ROLE civicconnect_app PASSWORD '...';`
 3. Create the first manager: in a **new** query, paste the `INSERT INTO civicconnect.employee ...`
    statement from the end of that file (without the `--`), fill in the name, a lower-case email and a
    temporary password, and run it. If it says `extensions.crypt` does not exist, enable **pgcrypto**
    under Database > Extensions and run it again. Do not save these queries.
 4. Check: `SELECT emp_id, email, role, left(password, 4) FROM civicconnect.employee;` shows one
    manager whose password starts with `$2a$`.
-5. Note the connection details: **Connect > Session pooler** shows the host
-   (`aws-0-<region>.pooler.supabase.com`), port `5432`, database `postgres`, and a user name
+5. Note the connection details: **Connect > Session pooler** shows the host (for London
+   `aws-1-eu-west-2.pooler.supabase.com` - copy the exact one), port `5432`, database `postgres`, and a user name
    `postgres.<project-ref>` - the part after `postgres.` is the project ref.
    - Render can only reach IPv4 addresses and Supabase's direct connection is IPv6, so always use
      the **session pooler** (port 5432) - never `db.<project-ref>.supabase.co`, and never the
@@ -66,12 +71,15 @@ database behind the public site (D-31). Integration tests only run against a loc
    ClarissaBierman, so the Render GitHub app has to be allowed on it - Clarissa may have to approve
    the request (GitHub > Settings > Applications > Render > Repository access).
 2. Pick `SEN381-Project-CivicConnect` and the branch **prod**. Render reads `render.yaml` and shows
-   one web service, `civicconnect` (free plan, Frankfurt, Docker).
+   one web service, `civicconnect` (free plan, Frankfurt, Docker). If the repository is not in the
+   list, Render's GitHub app is not allowed on ClarissaBierman's account yet: Clarissa installs it
+   (GitHub > Settings > Applications, or the "Configure GitHub" link Render shows) with access to this
+   repository.
 3. Fill in the values Render asks for:
 
    | Key | Value |
    |---|---|
-   | `DB_URL` | `jdbc:postgresql://aws-0-<region>.pooler.supabase.com:5432/postgres?sslmode=require` |
+   | `DB_URL` | `jdbc:postgresql://aws-1-eu-west-2.pooler.supabase.com:5432/postgres?sslmode=require` (your exact host from Connect; no user name or password in it) |
    | `DB_USERNAME` | `civicconnect_app.<project-ref>` |
    | `DB_PASSWORD` | the `civicconnect_app` password from step 2.2 |
    | `FLYWAY_USER` | `postgres.<project-ref>` |
@@ -91,6 +99,10 @@ database behind the public site (D-31). Integration tests only run against a loc
 - **Releasing**: open a pull request from `main` to `prod`. When it is merged, the checks run on
   `prod` and Render deploys once they are all green. A failing check means Render keeps the previous
   version running.
+- **Latency**: the app (Frankfurt) and the database (London) are close, so each database query adds
+  roughly 10-20 ms - more than the local load test, which had no network between them (R-26). Repeat
+  the k6 pilot against a test project in the same setup before quoting response times for the deployed
+  site. (With a Cape Town database it would be 150-200 ms per query.)
 - **Sleep**: the free instance stops after 15 minutes without visitors and takes a minute or more to
   start again. Open the site a few minutes before a demo.
 - **Supabase pauses** a free project after a week without activity (`/api/v1/health` then answers 503).
@@ -109,6 +121,7 @@ database behind the public site (D-31). Integration tests only run against a loc
 | Render never starts a deploy | A GitHub check failed (or did not run) on the latest `prod` commit. Fix it on `main` and release again. |
 | `password authentication failed` | The user name needs the project ref: `civicconnect_app.<project-ref>` and `postgres.<project-ref>`. |
 | `Tenant or user not found` | Wrong project ref or pooler region in `DB_URL` / user name - copy them from the Connect panel. |
+| `DB_URL` copied as `postgresql://user:password@host...` | Use the JDBC form `jdbc:postgresql://host:5432/postgres?sslmode=require`; the user name and password go in their own variables (and `$` in a password must not be URL-encoded there). |
 | `Network is unreachable` / an IPv6 address | `DB_URL` uses the direct host. Use the session pooler host. |
 | `permission denied` during Flyway | `FLYWAY_USER` must be the owner, `postgres.<project-ref>`, not `civicconnect_app`. |
 | Flyway: `relation "civicconnect.client" does not exist` | The production build script was not run (step 2.2). |
