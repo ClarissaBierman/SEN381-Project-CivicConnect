@@ -7,6 +7,7 @@ import com.civicconnect.requests.dto.PriorityChange;
 import com.civicconnect.requests.dto.RequestDetail;
 import com.civicconnect.requests.dto.RequestSummary;
 import com.civicconnect.requests.dto.StatusChangeRequest;
+import com.civicconnect.requests.service.RequestFilter;
 import com.civicconnect.requests.service.RequestService;
 
 import jakarta.validation.Valid;
@@ -60,16 +61,22 @@ public class RequestController {
         return requestService.get(id);
     }
 
-    /** API-07 e.g. GET /api/v1/requests?status=NEW&categoryId=2&from=2026-10-01&to=2026-10-31&page=0&size=20 */
+    /**
+     * API-07 e.g. GET /api/v1/requests?status=NEW&categoryId=2&from=2026-10-01&to=2026-10-31&page=0&size=20
+     * open=true: New, Assigned or In Progress only; unassigned=true: no current handler.
+     */
     @GetMapping
     @PreAuthorize("hasAnyRole('STAFF', 'MANAGEMENT')")
     public PagedModel<RequestSummary> list(
             @RequestParam(required = false) ServiceRequest.Status status,
+            @RequestParam(defaultValue = "false") boolean open,
+            @RequestParam(defaultValue = "false") boolean unassigned,
             @RequestParam(required = false) Long categoryId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        return new PagedModel<>(requestService.list(status, categoryId, from, to, SortGuard.allow(pageable, SORTABLE)));
+        return new PagedModel<>(requestService.list(new RequestFilter(status, open, unassigned, categoryId, from, to),
+                SortGuard.allow(pageable, SORTABLE)));
     }
 
     /** API-09 */

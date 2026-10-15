@@ -40,9 +40,8 @@
       </thead>
       <tbody>
         @for (r of result()?.content ?? []; track r.id) {
-          <tr class="clickable" [class.selected]="detail()?.id === r.id" tabindex="0"
-              (click)="open(r.id)" (keydown.enter)="open(r.id)">
-            <td>{{ r.refNum }}</td>
+          <tr class="clickable" [class.selected]="detail()?.id === r.id" (click)="open(r.id)">
+            <td><button type="button" class="link-btn row-link" [attr.aria-pressed]="detail()?.id === r.id">{{ r.refNum }}</button></td>
             <td>{{ r.categoryName }}</td>
             <td><app-status-badge [status]="r.status" /></td>
             <td>{{ r.priority ? priorityLabels[r.priority] : '-' }}</td>
@@ -68,7 +67,7 @@
   </section>
 
   <!-- Right panel: request detail -->
-  <section class="panel" aria-live="polite">
+  <section class="panel">
     @if (detail(); as d) {
       <h2>{{ d.refNum }} - {{ d.categoryName }}</h2>
       <!-- Marker 4: requester by number only; priority visible but only Management changes it (FR-016) -->
@@ -76,6 +75,34 @@
         Requester #{{ d.requesterNumber }} | Location: {{ d.location }} |
         Priority: {{ d.priority ? priorityLabels[d.priority] : 'Not set' }}
       </p>
+      @if (isManager()) {
+        <!-- Management only: contact the requester about this request (ASR-005 - details on demand) -->
+        @if (contact(); as c) {
+          <div class="description">
+            <strong>{{ c.firstName }} {{ c.surname }}</strong> ({{ c.active ? 'Active' : 'Inactive' }})<br />
+            <a [href]="'mailto:' + c.email">{{ c.email }}</a>{{ c.phone ? ' | ' + c.phone : '' }}
+            <div class="inline-row">
+              <button type="button" class="link-btn" (click)="hideContact()">Hide contact details</button>
+              @if (c.active) {
+                <button type="button" class="link-btn" (click)="setRequesterActive(false)">
+                  {{ confirmDeactivate() ? 'Click again to deactivate this account' : 'Deactivate account' }}
+                </button>
+                @if (confirmDeactivate()) {
+                  <button type="button" class="link-btn" (click)="confirmDeactivate.set(false)">Cancel</button>
+                }
+              } @else {
+                <button type="button" class="link-btn" (click)="setRequesterActive(true)">Activate account</button>
+              }
+            </div>
+          </div>
+        } @else {
+          <button type="button" class="link-btn" (click)="showContact()">Contact requester</button>
+          <small class="hint">Viewing contact details is logged.</small>
+        }
+        @if (contactError()) {
+          <p class="error-box" role="alert">{{ contactError() }}</p>
+        }
+      }
       <p class="description">{{ d.description }}</p>
       @if (d.attachmentUrl) {
         <p><a [href]="d.attachmentUrl" target="_blank" rel="noopener noreferrer">Attachment link</a></p>
@@ -97,18 +124,19 @@
           @if (d.allowedTransitions.length) {
             <label for="toStatus">Change to:</label>
             <select id="toStatus" [(ngModel)]="toStatus">
+              <option [ngValue]="null" disabled>Select a status</option>
               @for (s of d.allowedTransitions; track s) {
                 <option [ngValue]="s">{{ statusLabels[s] }}</option>
               }
             </select>
-            <button type="button" class="btn" [disabled]="busy()" (click)="updateStatus()">Update</button>
+            <button type="button" class="btn" [disabled]="busy() || !toStatus" (click)="updateStatus()">Update</button>
           }
         </div>
         <small class="hint">
           @if (d.allowedTransitions.length) {
             Only allowed next statuses are listed ({{ labelsFor(d.allowedTransitions) }})
-          } @else if (d.status === 'NEW') {
-            Accept the request before changing its status.
+          } @else {
+            Only the assigned handler or a manager can change the status of this request.
           }
         </small>
 
@@ -126,7 +154,7 @@
       @if (d.comments.length) {
         <h3>Notes</h3>
         <ul class="timeline">
-          @for (c of d.comments; track c.at) {
+          @for (c of d.comments; track c.id) {
             <li><strong>{{ c.at | date: 'dd/MM HH:mm' }}</strong> {{ c.author }}: {{ c.content }}</li>
           }
         </ul>
@@ -145,18 +173,20 @@
         }
       </ul>
 
-      @if (d.handlerId === null && !isReadOnly()) {
-        <!-- Marker 9: accept (handler) / assign (manager) -->
+      @if (canAssign(d)) {
+        <!-- Marker 9: accept (handler) / assign or reassign (manager) -->
         <div class="inline-row">
           @if (isManager()) {
-            <label for="assignTo">Assign to:</label>
+            <label for="assignTo">{{ d.handlerId === null ? 'Assign to:' : 'Reassign to:' }}</label>
             <select id="assignTo" [(ngModel)]="assignTo">
               <option [ngValue]="null" disabled>Choose handler</option>
               @for (h of handlers(); track h.id) {
                 <option [ngValue]="h.id">{{ h.name }}</option>
               }
             </select>
-            <button type="button" class="btn" [disabled]="busy() || assignTo === null" (click)="accept()">Assign</button>
+            <button type="button" class="btn" [disabled]="busy() || assignTo === null" (click)="accept()">
+              {{ d.handlerId === null ? 'Assign' : 'Reassign' }}
+            </button>
           } @else {
             <button type="button" class="btn" [disabled]="busy()" (click)="accept()">Accept request</button>
             <small class="hint">(shown on unassigned requests)</small>

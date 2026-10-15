@@ -2,7 +2,6 @@ package com.civicconnect.reporting.service;
 
 import com.civicconnect.common.error.ErrorCode;
 import com.civicconnect.common.security.CurrentUserService;
-import com.civicconnect.common.security.DbSession;
 import com.civicconnect.reporting.dto.ActivityReport;
 import com.civicconnect.reporting.repository.ReportRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -27,7 +26,7 @@ class ReportServiceTest {
     ReportServiceTest() {
         CurrentUserService currentUser = mock(CurrentUserService.class);
         when(currentUser.get()).thenReturn(manager(1));
-        service = new ReportService(repo, currentUser, mock(DbSession.class));
+        service = new ReportService(repo, currentUser);
     }
 
     @Test

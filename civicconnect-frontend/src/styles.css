@@ -100,6 +100,8 @@ textarea { resize: vertical; }
   padding: 0 0.25rem;
 }
 .link-btn:disabled { opacity: 0.4; cursor: default; }
+/* First cell of a clickable table row: the keyboard-reachable control for the row */
+.link-btn.row-link { padding: 0; text-decoration: underline; text-align: left; }
 
 .actions, .inline-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin: 0.5rem 0; }
 .stack { display: flex; flex-direction: column; gap: 0.6rem; }
@@ -131,7 +133,7 @@ tr.clickable:hover, tr.selected { background: #e2e2e2; }
 
 .description { background: var(--surface-2); padding: 0.6rem; white-space: pre-wrap; }
 
-.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-top: 1rem; }
+.tiles { display: grid; grid-template-columns: repeat(6, 1fr); gap: 1rem; margin-top: 1rem; }
 .tile {
   border: 2px solid var(--line);
   border-radius: 4px;
@@ -143,6 +145,9 @@ tr.clickable:hover, tr.selected { background: #e2e2e2; }
 }
 .tile.strong { border-width: 3px; }
 .tile .big { font-size: 2.2rem; font-weight: 700; }
+@media (max-width: 900px) {
+  .tiles { grid-template-columns: repeat(3, 1fr); }
+}
 @media (max-width: 700px) {
   .tiles { grid-template-columns: repeat(2, 1fr); }
 }
@@ -155,3 +160,5 @@ tr.clickable:hover, tr.selected { background: #e2e2e2; }
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+
+pre.description { margin: 0.25rem 0; overflow-x: auto; font-size: 0.85rem; }

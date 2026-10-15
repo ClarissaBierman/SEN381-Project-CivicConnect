@@ -34,9 +34,11 @@ const CLIENT_MESSAGES: Record<Field, string> = {
             formControlName="firstName"
             autocomplete="given-name"
             [class.invalid]="!!message('firstName')"
+            [attr.aria-invalid]="!!message('firstName')"
+            [attr.aria-describedby]="message('firstName') ? 'firstName-error' : null"
           />
           @if (message('firstName'); as m) {
-            <span class="error">{{ m }}</span>
+            <span class="error" id="firstName-error">{{ m }}</span>
           }
         </div>
 
@@ -47,9 +49,11 @@ const CLIENT_MESSAGES: Record<Field, string> = {
             formControlName="surname"
             autocomplete="family-name"
             [class.invalid]="!!message('surname')"
+            [attr.aria-invalid]="!!message('surname')"
+            [attr.aria-describedby]="message('surname') ? 'surname-error' : null"
           />
           @if (message('surname'); as m) {
-            <span class="error">{{ m }}</span>
+            <span class="error" id="surname-error">{{ m }}</span>
           }
         </div>
 
@@ -61,9 +65,11 @@ const CLIENT_MESSAGES: Record<Field, string> = {
             formControlName="email"
             autocomplete="email"
             [class.invalid]="!!message('email')"
+            [attr.aria-invalid]="!!message('email')"
+            [attr.aria-describedby]="message('email') ? 'email-error' : null"
           />
           @if (message('email'); as m) {
-            <span class="error">{{ m }}</span>
+            <span class="error" id="email-error">{{ m }}</span>
           }
         </div>
 
@@ -75,9 +81,11 @@ const CLIENT_MESSAGES: Record<Field, string> = {
             formControlName="phone"
             autocomplete="tel"
             [class.invalid]="!!message('phone')"
+            [attr.aria-invalid]="!!message('phone')"
+            [attr.aria-describedby]="message('phone') ? 'phone-error' : null"
           />
           @if (message('phone'); as m) {
-            <span class="error">{{ m }}</span>
+            <span class="error" id="phone-error">{{ m }}</span>
           }
         </div>
 
@@ -89,10 +97,12 @@ const CLIENT_MESSAGES: Record<Field, string> = {
             formControlName="password"
             autocomplete="new-password"
             [class.invalid]="!!message('password')"
+            [attr.aria-invalid]="!!message('password')"
+            [attr.aria-describedby]="message('password') ? 'password-error' : null"
           />
           <span class="hint">At least 8 characters.</span>
           @if (message('password'); as m) {
-            <span class="error">{{ m }}</span>
+            <span class="error" id="password-error">{{ m }}</span>
           }
         </div>
 
@@ -104,9 +114,11 @@ const CLIENT_MESSAGES: Record<Field, string> = {
             formControlName="confirmPassword"
             autocomplete="new-password"
             [class.invalid]="!!message('confirmPassword')"
+            [attr.aria-invalid]="!!message('confirmPassword')"
+            [attr.aria-describedby]="message('confirmPassword') ? 'confirmPassword-error' : null"
           />
           @if (message('confirmPassword'); as m) {
-            <span class="error">{{ m }}</span>
+            <span class="error" id="confirmPassword-error">{{ m }}</span>
           }
         </div>
 

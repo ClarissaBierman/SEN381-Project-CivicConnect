@@ -1,5 +1,6 @@
 package com.civicconnect.access.dto;
 
+import com.civicconnect.common.validation.MaxBytes;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Past;
 import jakarta.validation.constraints.Size;
@@ -17,6 +18,6 @@ public record ClientPatch(
         @Email @Size(max = 255) String email,
         @Size(max = 30) String phone,
         @Past LocalDate dateOfBirth,
-        @Size(min = 8, max = 72) String password,
-        String currentPassword
+        @Size(min = 8, max = 72) @MaxBytes(72) String password,
+        @MaxBytes(72) String currentPassword
 ) {}

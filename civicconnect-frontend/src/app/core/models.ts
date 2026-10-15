@@ -1,7 +1,8 @@
 // Shapes of the /api/v1 DTOs from PED v2.0 Section 21 (API conventions + endpoint contract).
 // Field names are camelCase and timestamps ISO-8601 UTC instants ("...Z"), as the contract requires.
 
-export type Role = 'REQUESTER' | 'HANDLER' | 'MANAGER';
+// Same role names as the API and the database (no translation layer).
+export type Role = 'REQUESTER' | 'STAFF' | 'MANAGEMENT';
 
 // FR-009 state machine values - must match ServiceRequest.Status and the DB CHECK constraint.
 export type RequestStatus = 'NEW' | 'ASSIGNED' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED' | 'REJECTED';
@@ -107,13 +108,15 @@ export interface AuditEntry {
   toStatus: RequestStatus | null;
 }
 
-// API-07 query params
+// API-07 query params. open = New/Assigned/In Progress; unassigned = no current handler.
 export interface RequestFilter {
   status: RequestStatus | null;
+  open?: boolean;
+  unassigned?: boolean;
   categoryId: number | null;
   from: string | null; // yyyy-MM-dd
   to: string | null;
-  sort: 'createdAt,desc' | 'createdAt,asc' | 'priority,desc' | 'updatedAt,desc';
+  sort: 'createdAt,desc' | 'createdAt,asc' | 'priority,desc';
   page: number;
   size: number;
 }
@@ -150,4 +153,107 @@ export interface ApiProblem {
   title: string;
   detail: string;
   fieldErrors?: { field: string; message: string }[];
+}
+
+// ---- Management: employees (API: /employees, /employees/{id}/categories) ----
+
+export type EmployeeRole = Exclude<Role, 'REQUESTER'>;
+
+export const EMPLOYEE_ROLE_LABELS: Record<EmployeeRole, string> = {
+  STAFF: 'Staff',
+  MANAGEMENT: 'Manager',
+};
+
+export interface Employee {
+  id: number;
+  firstName: string;
+  surname: string;
+  email: string;
+  phone: string | null;
+  role: EmployeeRole;
+  active: boolean;
+}
+
+export interface NewEmployee {
+  firstName: string;
+  surname: string;
+  email: string;
+  password: string;
+  phone: string | null;
+  role: EmployeeRole;
+}
+
+export interface EmployeeChange {
+  role?: EmployeeRole;
+  active?: boolean;
+}
+
+// ---- Clients ----
+
+// GET /clients/me - the requester's own profile
+export interface ClientProfile {
+  id: number;
+  firstName: string;
+  surname: string;
+  email: string;
+  phone: string | null;
+  dateOfBirth: string | null;
+  active: boolean;
+}
+
+// PATCH /clients/me - only fields sent are changed; email/password need currentPassword
+export interface ProfileChange {
+  firstName?: string;
+  surname?: string;
+  phone?: string | null;
+  dateOfBirth?: string;
+  email?: string;
+  password?: string;
+  currentPassword?: string;
+}
+
+// GET /clients/{id}/contact - Management only, contact details only (ASR-005)
+export interface ClientContact {
+  id: number;
+  firstName: string;
+  surname: string;
+  email: string;
+  phone: string | null;
+  active: boolean;
+}
+
+// ---- Audit (/audit/{resource}) ----
+
+export type AuditResource =
+  | 'requests'
+  | 'assignments'
+  | 'comments'
+  | 'categories'
+  | 'handler-categories'
+  | 'employees'
+  | 'clients';
+
+export const AUDIT_RESOURCE_LABELS: Record<AuditResource, string> = {
+  requests: 'Requests',
+  assignments: 'Assignments',
+  comments: 'Comments',
+  categories: 'Categories',
+  'handler-categories': 'Handler categories',
+  employees: 'Employees',
+  clients: 'Client accounts',
+};
+
+export const ALL_AUDIT_RESOURCES = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResource[];
+
+export interface AuditRecord {
+  audId: number;
+  resource: AuditResource;
+  operation: 'INSERT' | 'UPDATE' | 'DELETE';
+  recordId: string;
+  oldData: Record<string, unknown> | null;
+  newData: Record<string, unknown> | null;
+  changedFields: string[];
+  empId: number | null;
+  clientId: number | null;
+  changedAt: string;
 }

@@ -9,6 +9,8 @@ import java.util.Set;
 /**
  * API-06. Times are UTC instants. handlerId/handlerName and allowedTransitions are only filled for
  * staff and managers; requesters see the status, their own fields and comments meant for them.
+ * statusHistory lists every status the request has had, oldest first, with no names (FR-003, FR-007).
+ * allowedTransitions is empty for staff who may not move the request (not its handler).
  */
 public record RequestDetail(
         Long id,
@@ -27,5 +29,6 @@ public record RequestDetail(
         Instant updatedAt,
         Instant closedAt,
         Set<ServiceRequest.Status> allowedTransitions,
-        List<CommentResponse> comments
+        List<CommentResponse> comments,
+        List<StatusChange> statusHistory
 ) {}

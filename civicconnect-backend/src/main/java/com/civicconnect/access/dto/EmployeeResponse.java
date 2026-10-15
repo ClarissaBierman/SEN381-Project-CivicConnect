@@ -1,9 +1,10 @@
 package com.civicconnect.access.dto;
 
+import com.civicconnect.common.time.Time;
 import com.civicconnect.access.domain.Employee;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 public record EmployeeResponse(
         Long id,
@@ -18,11 +19,11 @@ public record EmployeeResponse(
         String area,
         String city,
         String postalCode,
-        LocalDateTime createdAt
+        Instant createdAt
 ) {
     public static EmployeeResponse from(Employee e) {
         return new EmployeeResponse(e.getEmpId(), e.getFirstName(), e.getSurname(), e.getEmail(), e.getPhone(),
                 e.getRole(), e.isActive(), e.getDateOfBirth(), e.getStreet(), e.getArea(), e.getCity(),
-                e.getPostalCode(), e.getCreatedAt());
+                e.getPostalCode(), Time.toInstant(e.getCreatedAt()));
     }
 }

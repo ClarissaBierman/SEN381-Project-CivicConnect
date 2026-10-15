@@ -17,7 +17,8 @@
     <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
       <div class="field">
         <label for="categoryId">Category *</label>
-        <select id="categoryId" formControlName="categoryId" [class.invalid]="errorFor('categoryId')"
+        <select id="categoryId" formControlName="categoryId" [class.invalid]="errorFor('categoryId')" [attr.aria-invalid]="!!errorFor('categoryId')"
+                [attr.aria-describedby]="errorFor('categoryId') ? 'categoryId-error' : null"
                 (change)="clearServerError('categoryId')">
           <option [ngValue]="null" disabled>Select a category</option>
           @for (c of categories(); track c.catId) {
@@ -25,30 +26,33 @@
           }
         </select>
         <small class="hint">Chosen from the list maintained by Management - no free text</small>
-        @if (errorFor('categoryId'); as e) { <small class="error">{{ e }}</small> }
+        @if (errorFor('categoryId'); as e) { <small class="error" id="categoryId-error">{{ e }}</small> }
       </div>
 
       <div class="field">
         <label for="description">Description *</label>
         <textarea id="description" rows="5" formControlName="description" placeholder="Describe the problem ..."
-                  [class.invalid]="errorFor('description')" (input)="clearServerError('description')"></textarea>
+                  [class.invalid]="errorFor('description')" [attr.aria-invalid]="!!errorFor('description')"
+                [attr.aria-describedby]="errorFor('description') ? 'description-error' : null" (input)="clearServerError('description')"></textarea>
         <small class="hint">Max 2000 characters ({{ form.controls.description.value.length }}/2000)</small>
-        @if (errorFor('description'); as e) { <small class="error">{{ e }}</small> }
+        @if (errorFor('description'); as e) { <small class="error" id="description-error">{{ e }}</small> }
       </div>
 
       <div class="field">
         <label for="location">Location *</label>
         <input id="location" type="text" formControlName="location"
-               [class.invalid]="errorFor('location')" (input)="clearServerError('location')" />
-        @if (errorFor('location'); as e) { <small class="error">{{ e }}</small> }
+               [class.invalid]="errorFor('location')" [attr.aria-invalid]="!!errorFor('location')"
+                [attr.aria-describedby]="errorFor('location') ? 'location-error' : null" (input)="clearServerError('location')" />
+        @if (errorFor('location'); as e) { <small class="error" id="location-error">{{ e }}</small> }
       </div>
 
       <div class="field">
         <label for="attachmentUrl">Attachment link (optional)</label>
         <input id="attachmentUrl" type="url" formControlName="attachmentUrl" placeholder="https://..."
-               [class.invalid]="errorFor('attachmentUrl')" />
+               [class.invalid]="errorFor('attachmentUrl')" [attr.aria-invalid]="!!errorFor('attachmentUrl')"
+                [attr.aria-describedby]="errorFor('attachmentUrl') ? 'attachmentUrl-error' : null" />
         <small class="hint">Only a link is stored (file upload is deferred)</small>
-        @if (errorFor('attachmentUrl'); as e) { <small class="error">{{ e }}</small> }
+        @if (errorFor('attachmentUrl'); as e) { <small class="error" id="attachmentUrl-error">{{ e }}</small> }
       </div>
 
       <div class="actions">
@@ -68,10 +72,9 @@
         <tr><th>Ref</th><th>Category</th><th>Status</th><th>Updated</th></tr>
       </thead>
       <tbody>
-        @for (r of myRequests(); track r.id) {
-          <tr class="clickable" [class.selected]="selected()?.id === r.id" tabindex="0"
-              (click)="select(r.id)" (keydown.enter)="select(r.id)">
-            <td>{{ r.refNum }}</td>
+        @for (r of myRequests()?.content ?? []; track r.id) {
+          <tr class="clickable" [class.selected]="selected()?.id === r.id" (click)="select(r.id)">
+            <td><button type="button" class="link-btn row-link" [attr.aria-pressed]="selected()?.id === r.id">{{ r.refNum }}</button></td>
             <td>{{ r.categoryName }}</td>
             <td><app-status-badge [status]="r.status" /></td>
             <td>{{ r.updatedAt | date: 'dd/MM' }}</td>
@@ -81,7 +84,18 @@
         }
       </tbody>
     </table>
-    <small class="hint">Own requests only, newest first</small>
+    @if (myRequests(); as page) {
+      <div class="pager">
+        <button type="button" class="link-btn" [disabled]="page.page === 0" (click)="goToPage(-1)" aria-label="Previous page">◀</button>
+        Page {{ page.page + 1 }} of {{ page.totalPages }}
+        <button type="button" class="link-btn" [disabled]="page.page + 1 >= page.totalPages" (click)="goToPage(1)" aria-label="Next page">▶</button>
+        <span class="hint">({{ page.totalElements }} requests, newest first)</span>
+      </div>
+    }
+
+    @if (detailError()) {
+      <p class="error-box" role="alert">{{ detailError() }}</p>
+    }
 
     @if (selected(); as d) {
       <h2>{{ d.refNum }}</h2>
@@ -92,7 +106,7 @@
       </p>
       <h3>Updates from CivicConnect</h3>
       <ul class="timeline">
-        @for (u of d.updates; track u.at) {
+        @for (u of d.updates; track $index) {
           <li><strong>{{ u.at | date: 'dd/MM HH:mm' }}</strong> {{ u.text }}</li>
         }
       </ul>

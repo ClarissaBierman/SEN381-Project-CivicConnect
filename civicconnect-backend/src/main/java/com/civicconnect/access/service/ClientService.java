@@ -1,5 +1,6 @@
 package com.civicconnect.access.service;
 
+import com.civicconnect.common.web.Text;
 import com.civicconnect.access.domain.Client;
 import com.civicconnect.access.dto.ClientContactResponse;
 import com.civicconnect.access.dto.ClientPatch;
@@ -11,7 +12,6 @@ import com.civicconnect.common.error.Errors;
 import com.civicconnect.common.ratelimit.LoginAttemptLimiter;
 import com.civicconnect.common.security.CurrentUser;
 import com.civicconnect.common.security.CurrentUserService;
-import com.civicconnect.common.security.DbSession;
 import com.civicconnect.common.time.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,31 +30,27 @@ public class ClientService {
     private final EmployeeRepository employeeRepository;
     private final PasswordEncoder passwordEncoder;
     private final CurrentUserService currentUser;
-    private final DbSession db;
     private final LoginAttemptLimiter loginLimiter;
 
     public ClientService(ClientRepository clientRepository, EmployeeRepository employeeRepository,
-                         PasswordEncoder passwordEncoder, CurrentUserService currentUser, DbSession db,
+                         PasswordEncoder passwordEncoder, CurrentUserService currentUser,
                          LoginAttemptLimiter loginLimiter) {
         this.clientRepository = clientRepository;
         this.employeeRepository = employeeRepository;
         this.passwordEncoder = passwordEncoder;
         this.currentUser = currentUser;
-        this.db = db;
         this.loginLimiter = loginLimiter;
     }
 
     @Transactional(readOnly = true)
     public ClientResponse me() {
         CurrentUser user = currentUser.get();
-        db.begin(user);
         return ClientResponse.from(loadSelf(user));
     }
 
     @Transactional
     public ClientResponse updateMe(ClientPatch body) {
         CurrentUser user = currentUser.get();
-        db.begin(user);
         Client c = loadSelf(user);
 
         String newEmail = body.email() == null ? null : body.email().trim().toLowerCase(Locale.ROOT);
@@ -71,7 +67,7 @@ public class ClientService {
         }
         if (body.firstName() != null) c.setFirstName(body.firstName().trim());
         if (body.surname() != null) c.setSurname(body.surname().trim());
-        if (body.phone() != null) c.setPhone(body.phone());
+        if (body.phone() != null) c.setPhone(Text.blankToNull(body.phone())); // "" clears it
         if (body.dateOfBirth() != null) c.setDateOfBirth(body.dateOfBirth());
         if (body.password() != null) c.setPassword(passwordEncoder.encode(body.password()));
         c.setUpdatedAt(Time.now());
@@ -86,7 +82,6 @@ public class ClientService {
     @Transactional(readOnly = true)
     public ClientContactResponse contact(Long clientId) {
         CurrentUser user = currentUser.get();
-        db.begin(user);
         ClientContactResponse contact = clientRepository.findContact(clientId).map(ClientContactResponse::from)
                 .orElseThrow(() -> Errors.notFound("Client"));
         log.info("Employee {} viewed the contact details of client {}", user.id(), clientId);
@@ -95,7 +90,6 @@ public class ClientService {
 
     @Transactional
     public void setActive(Long clientId, boolean active) {
-        db.begin(currentUser.get());
         if (clientRepository.updateActive(clientId, active, Time.now()) == 0) {
             throw Errors.notFound("Client");
         }

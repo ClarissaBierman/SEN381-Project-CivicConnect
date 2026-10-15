@@ -4,7 +4,6 @@ import com.civicconnect.access.service.StaffDirectory;
 import com.civicconnect.common.error.Errors;
 import com.civicconnect.common.security.CurrentUser;
 import com.civicconnect.common.security.CurrentUserService;
-import com.civicconnect.common.security.DbSession;
 import com.civicconnect.common.time.Time;
 import com.civicconnect.reporting.domain.AuditEntry;
 import com.civicconnect.reporting.domain.AuditResource;
@@ -45,23 +44,20 @@ public class AuditService {
     private final RequestAccess access;
     private final StaffDirectory staff;
     private final CurrentUserService currentUser;
-    private final DbSession db;
     private final JsonMapper json = JsonMapper.builder().build();
 
     public AuditService(AuditRepository auditRepository, RequestAccess access, StaffDirectory staff,
-                        CurrentUserService currentUser, DbSession db) {
+                        CurrentUserService currentUser) {
         this.auditRepository = auditRepository;
         this.access = access;
         this.staff = staff;
         this.currentUser = currentUser;
-        this.db = db;
     }
 
     /** API-11: full history of one request, oldest first (FR-007, NFR-006). */
     @Transactional(readOnly = true)
     public List<RequestHistoryEntry> forRequest(Long requestId) {
         CurrentUser user = currentUser.get();
-        db.begin(user);
         access.checkStaffScope(access.load(requestId), user);
 
         List<AuditEntry> entries = auditRepository.findRequestHistory(String.valueOf(requestId));
@@ -85,7 +81,6 @@ public class AuditService {
     /** /audit/{resource}: audit entries of one table, newest first by default. Management only. */
     @Transactional(readOnly = true)
     public Page<AuditEntryResponse> search(AuditResource resource, String recordId, String operation, Pageable pageable) {
-        db.begin(currentUser.get());
         AuditEntry probe = AuditEntry.probe(resource.table(), recordId,
                 operation == null ? null : operation.trim().toUpperCase());
         Example<AuditEntry> example = Example.of(probe, ExampleMatcher.matching()
@@ -97,7 +92,6 @@ public class AuditService {
     /** One audit entry, only if it belongs to the requested table (so /audit/requests/{id} cannot show a client row). */
     @Transactional(readOnly = true)
     public AuditEntryResponse get(AuditResource resource, Long auditId) {
-        db.begin(currentUser.get());
         return auditRepository.findById(auditId)
                 .filter(e -> e.getTable().equals(resource.table()))
                 .map(e -> toResponse(e, resource))

@@ -16,6 +16,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
+import java.util.Set;
 
 import static com.civicconnect.support.TestData.*;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -45,7 +46,7 @@ class HandlerRemovalListenerTest {
         ServiceRequest inProgress = request(11, Status.IN_PROGRESS, it, 2);
         RequestHandler a = new RequestHandler(assigned, employee(3, Employee.Role.STAFF, false));
         RequestHandler b = new RequestHandler(inProgress, employee(3, Employee.Role.STAFF, false));
-        when(handlers.findActiveForEmployee(3L)).thenReturn(List.of(a, b));
+        when(handlers.findActiveForEmployee(3L, ServiceRequest.OPEN_STATUSES)).thenReturn(List.of(a, b));
 
         listener.onStaffMemberRemoved(new StaffMemberRemovedEvent(3L, 1L, "deactivated"));
 
@@ -67,10 +68,28 @@ class HandlerRemovalListenerTest {
     @Test
     @DisplayName("A staff member with no open requests: nothing changes")
     void nothingToRelease() {
-        when(handlers.findActiveForEmployee(5L)).thenReturn(List.of());
+        when(handlers.findActiveForEmployee(5L, ServiceRequest.OPEN_STATUSES)).thenReturn(List.of());
 
         listener.onStaffMemberRemoved(new StaffMemberRemovedEvent(5L, 1L, "deactivated"));
 
         verifyNoInteractions(comments);
+    }
+
+    @Test
+    @DisplayName("Removed from one category: only requests in that category are released")
+    void onlyTheRemovedCategory() {
+        ServiceRequest inIt = request(10, Status.ASSIGNED, it, 1);
+        ServiceRequest elsewhere = request(11, Status.ASSIGNED, category(2, "Damaged Equipment", true), 1);
+        RequestHandler a = new RequestHandler(inIt, employee(3, Employee.Role.STAFF, true));
+        RequestHandler b = new RequestHandler(elsewhere, employee(3, Employee.Role.STAFF, true));
+        when(handlers.findActiveForEmployee(3L, ServiceRequest.OPEN_STATUSES)).thenReturn(List.of(a, b));
+
+        listener.onStaffMemberRemoved(new StaffMemberRemovedEvent(3L, 1L, "removed from the category", Set.of(4L)));
+
+        assertThat(inIt.getStatus()).isEqualTo(Status.NEW);
+        assertThat(a.getUnassignedAt()).isNotNull();
+        assertThat(elsewhere.getStatus()).isEqualTo(Status.ASSIGNED);
+        assertThat(b.getUnassignedAt()).isNull();
+        verify(comments, times(1)).save(any());
     }
 }

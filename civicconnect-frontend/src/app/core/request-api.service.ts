@@ -75,6 +75,7 @@ interface ServerDetail extends ServerSummary {
   requesterId: number;
   allowedTransitions: RequestStatus[] | null;
   comments: ServerComment[];
+  statusHistory?: { status: RequestStatus; at: string }[];
 }
 
 interface ServerHistoryEntry {
@@ -129,6 +130,8 @@ export class RequestApiService {
   getRequests(f: RequestFilter): Observable<Page<RequestSummary>> {
     let params = new HttpParams().set('page', f.page).set('size', f.size).set('sort', f.sort);
     if (f.status) params = params.set('status', f.status);
+    if (f.open) params = params.set('open', true);
+    if (f.unassigned) params = params.set('unassigned', true);
     if (f.categoryId) params = params.set('categoryId', f.categoryId);
     if (f.from) params = params.set('from', f.from);
     if (f.to) params = params.set('to', f.to);
@@ -275,17 +278,22 @@ function toDetail(d: ServerDetail): RequestDetail {
 }
 
 /**
- * FR-004 "Updates from CivicConnect", newest first: submission, the current status, and every note
- * staff marked as visible to the requester. (The full step-by-step history is the audit trail, which
- * only staff can read.)
+ * FR-004 "Updates from CivicConnect", newest first: every status the request has had (from the
+ * server's statusHistory, with the time of each change) and every note staff marked as visible to the
+ * requester. No staff names are included (ASR-005).
  */
 function requesterUpdates(d: ServerDetail, comments: RequestComment[]): RequestUpdate[] {
-  const updates: RequestUpdate[] = [{ at: d.createdAt, text: 'Request submitted' }];
-  if (d.status !== 'NEW') {
-    updates.push({ at: d.closedAt ?? d.updatedAt, text: `Status: ${STATUS_LABELS[d.status]}` });
-  }
+  const updates: RequestUpdate[] = [];
+  const history = d.statusHistory?.length ? d.statusHistory : [{ status: 'NEW' as RequestStatus, at: d.createdAt }];
+  history.forEach((h, i) =>
+    updates.push({ at: h.at, text: i === 0 ? 'Request submitted' : `Status: ${STATUS_LABELS[h.status]}` }),
+  );
   for (const c of comments.filter((x) => x.visibleToRequester)) {
     updates.push({ at: c.at, text: `Note: ${c.content}` });
   }
-  return updates.sort((a, b) => b.at.localeCompare(a.at));
+  // Newest first; entries with the same time keep their order reversed (later event first)
+  return updates
+    .map((u, i) => ({ u, i }))
+    .sort((a, b) => b.u.at.localeCompare(a.u.at) || b.i - a.i)
+    .map((x) => x.u);
 }

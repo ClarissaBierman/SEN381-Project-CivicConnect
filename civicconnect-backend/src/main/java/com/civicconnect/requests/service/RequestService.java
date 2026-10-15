@@ -7,7 +7,6 @@ import com.civicconnect.common.error.ErrorCode;
 import com.civicconnect.common.error.Errors;
 import com.civicconnect.common.security.CurrentUser;
 import com.civicconnect.common.security.CurrentUserService;
-import com.civicconnect.common.security.DbSession;
 import com.civicconnect.common.time.Time;
 import com.civicconnect.requests.domain.Category;
 import com.civicconnect.requests.domain.Comment;
@@ -19,11 +18,13 @@ import com.civicconnect.requests.dto.AssignmentRequest;
 import com.civicconnect.requests.dto.NewServiceRequest;
 import com.civicconnect.requests.dto.RequestDetail;
 import com.civicconnect.requests.dto.RequestSummary;
+import com.civicconnect.requests.dto.StatusChange;
 import com.civicconnect.requests.dto.StatusChangeRequest;
 import com.civicconnect.requests.repository.CategoryRepository;
 import com.civicconnect.requests.repository.CommentRepository;
 import com.civicconnect.requests.repository.RequestHandlerRepository;
 import com.civicconnect.requests.repository.RequestRepository;
+import com.civicconnect.requests.repository.RequestSpecs;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -33,7 +34,6 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
@@ -61,12 +61,11 @@ public class RequestService {
     private final RequestAccess access;
     private final CommentViews commentViews;
     private final CurrentUserService currentUser;
-    private final DbSession db;
 
     public RequestService(RequestRepository requestRepository, CategoryRepository categoryRepository,
                           RequestHandlerRepository requestHandlerRepository, CommentRepository commentRepository,
                           StaffDirectory staff, TransitionPolicy transitionPolicy, RequestAccess access,
-                          CommentViews commentViews, CurrentUserService currentUser, DbSession db) {
+                          CommentViews commentViews, CurrentUserService currentUser) {
         this.requestRepository = requestRepository;
         this.categoryRepository = categoryRepository;
         this.requestHandlerRepository = requestHandlerRepository;
@@ -76,14 +75,12 @@ public class RequestService {
         this.access = access;
         this.commentViews = commentViews;
         this.currentUser = currentUser;
-        this.db = db;
     }
 
     /** API-04: a requester submits a new request (FR-001, FR-015). */
     @Transactional
     public RequestDetail create(NewServiceRequest body) {
         CurrentUser user = currentUser.get();
-        db.begin(user);
 
         Category category = categoryRepository.findById(body.categoryId())
                 .orElseThrow(() -> Errors.invalidField("categoryId", "Category does not exist"));
@@ -108,47 +105,43 @@ public class RequestService {
     @Transactional(readOnly = true)
     public Page<RequestSummary> mine(Pageable pageable) {
         CurrentUser user = currentUser.get();
-        db.begin(user);
-        return requestRepository.findByRequester(user.id(), pageable).map(RequestSummary::from);
+        RequestSpecs.Query q = RequestSpecs.ordered(RequestSpecs.requester(user.id()), pageable);
+        return requestRepository.findAll(q.spec(), q.pageable()).map(RequestSummary::from);
     }
 
     /** API-06: one request, if the user may see it (FR-002, FR-007). */
     @Transactional(readOnly = true)
     public RequestDetail get(Long id) {
         CurrentUser user = currentUser.get();
-        db.begin(user);
         return toDetail(access.loadViewable(id, user), user);
     }
 
-    /** API-07: staff see their categories only, managers see all (FR-005, FR-006). */
+    /**
+     * API-07: staff see their categories only, managers see all (FR-005, FR-006).
+     * open = New, Assigned or In Progress; unassigned = no current handler.
+     */
     @Transactional(readOnly = true)
-    public Page<RequestSummary> list(Status status, Long categoryId, LocalDate from, LocalDate to, Pageable pageable) {
+    public Page<RequestSummary> list(RequestFilter filter, Pageable pageable) {
         CurrentUser user = currentUser.get();
-        db.begin(user);
 
-        Specification<ServiceRequest> spec = (root, query, cb) -> cb.conjunction();
-        if (status != null) {
-            spec = spec.and((root, query, cb) -> cb.equal(root.get("status"), status));
-        }
-        if (categoryId != null) {
-            spec = spec.and((root, query, cb) -> cb.equal(root.get("category").get("catId"), categoryId));
-        }
+        Specification<ServiceRequest> spec = RequestSpecs.all();
+        if (filter.status() != null) spec = spec.and(RequestSpecs.status(filter.status()));
+        if (filter.open()) spec = spec.and(RequestSpecs.open());
+        if (filter.unassigned()) spec = spec.and(RequestSpecs.unassigned());
+        if (filter.categoryId() != null) spec = spec.and(RequestSpecs.category(filter.categoryId()));
         // Dates are UTC calendar days, like every stored timestamp
-        if (from != null) {
-            spec = spec.and((root, query, cb) -> cb.greaterThanOrEqualTo(root.get("createdAt"), from.atStartOfDay()));
-        }
-        if (to != null) {
-            spec = spec.and((root, query, cb) -> cb.lessThan(root.get("createdAt"), to.plusDays(1).atStartOfDay()));
-        }
+        if (filter.from() != null) spec = spec.and(RequestSpecs.createdFrom(filter.from()));
+        if (filter.to() != null) spec = spec.and(RequestSpecs.createdTo(filter.to()));
         if (user.isStaff()) {
             List<Long> scope = staff.categoryIds(user.id());
             if (scope.isEmpty()) {
                 return Page.empty(pageable);
             }
-            spec = spec.and((root, query, cb) -> root.get("category").get("catId").in(scope));
+            spec = spec.and(RequestSpecs.categoryIn(scope));
         }
 
-        Page<ServiceRequest> page = requestRepository.findAll(spec, pageable);
+        RequestSpecs.Query q = RequestSpecs.ordered(spec, pageable);
+        Page<ServiceRequest> page = requestRepository.findAll(q.spec(), q.pageable());
         Map<Long, Long> handlerByRequest = new HashMap<>();
         if (!page.isEmpty()) {
             for (Object[] row : requestHandlerRepository.findActiveHandlerIds(
@@ -167,7 +160,6 @@ public class RequestService {
     @Transactional
     public RequestDetail changeStatus(Long id, StatusChangeRequest body) {
         CurrentUser user = currentUser.get();
-        db.begin(user);
 
         ServiceRequest request = access.loadForUpdate(id);
         access.checkStaffScope(request, user);
@@ -210,7 +202,6 @@ public class RequestService {
     @Transactional
     public RequestDetail assign(Long id, AssignmentRequest body) {
         CurrentUser user = currentUser.get();
-        db.begin(user);
 
         ServiceRequest request = access.loadForUpdate(id);
         access.checkStaffScope(request, user);
@@ -276,7 +267,6 @@ public class RequestService {
     @Transactional
     public RequestDetail setPriority(Long id, Priority priority) {
         CurrentUser user = currentUser.get();
-        db.begin(user);
 
         ServiceRequest request = access.loadForUpdate(id);
         if (transitionPolicy.isTerminal(request.getStatus())) {
@@ -309,12 +299,23 @@ public class RequestService {
             }
             allowed = transitionPolicy.allowedFrom(r.getStatus());
             allowed.remove(Status.ASSIGNED); // assigning has its own endpoint
+            // Same rule as changeStatus: after assignment only the handler (or a manager) moves it on
+            if (user.isStaff() && r.getStatus() != Status.NEW && !user.id().equals(handlerId)) {
+                allowed.clear();
+            }
         }
+        List<StatusChange> history = requestRepository.statusHistory(r.getReqId()).stream()
+                .map(row -> new StatusChange(Status.valueOf((String) row[0]), Time.toInstant(toLocalDateTime(row[1]))))
+                .toList();
 
         return new RequestDetail(r.getReqId(), r.getRefNum(), r.getCategory().getCatId(), r.getCategory().getCatName(),
                 r.getDescription(), r.getLocation(), r.getAttachmentUrl(), r.getStatus(), r.getPriority(),
                 r.getRequester().getClientId(), handlerId, handlerName,
                 Time.toInstant(r.getCreatedAt()), Time.toInstant(r.getUpdatedAt()), Time.toInstant(r.getClosedAt()),
-                allowed, commentViews.forRequest(r.getReqId(), user));
+                allowed, commentViews.forRequest(r.getReqId(), user), history);
+    }
+
+    private static LocalDateTime toLocalDateTime(Object value) {
+        return value instanceof java.sql.Timestamp t ? t.toLocalDateTime() : (LocalDateTime) value;
     }
 }

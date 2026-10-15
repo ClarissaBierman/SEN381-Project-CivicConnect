@@ -1,5 +1,6 @@
 package com.civicconnect.access.service;
 
+import com.civicconnect.common.web.Text;
 import com.civicconnect.access.domain.Employee;
 import com.civicconnect.access.domain.HandlerCategory;
 import com.civicconnect.access.dto.EmployeePatch;
@@ -15,7 +16,6 @@ import com.civicconnect.common.error.ErrorCode;
 import com.civicconnect.common.error.Errors;
 import com.civicconnect.common.security.CurrentUser;
 import com.civicconnect.common.security.CurrentUserService;
-import com.civicconnect.common.security.DbSession;
 import com.civicconnect.requests.domain.Category;
 import com.civicconnect.requests.dto.CategoryResponse;
 import com.civicconnect.requests.repository.CategoryRepository;
@@ -40,13 +40,12 @@ public class EmployeeService {
     private final HandlerCategoryRepository handlerCategoryRepository;
     private final PasswordEncoder passwordEncoder;
     private final CurrentUserService currentUser;
-    private final DbSession db;
     private final StaffDirectory staffDirectory;
     private final ApplicationEventPublisher events;
 
     public EmployeeService(EmployeeRepository employeeRepository, ClientRepository clientRepository,
                            CategoryRepository categoryRepository, HandlerCategoryRepository handlerCategoryRepository,
-                           PasswordEncoder passwordEncoder, CurrentUserService currentUser, DbSession db,
+                           PasswordEncoder passwordEncoder, CurrentUserService currentUser,
                            StaffDirectory staffDirectory, ApplicationEventPublisher events) {
         this.employeeRepository = employeeRepository;
         this.clientRepository = clientRepository;
@@ -54,26 +53,22 @@ public class EmployeeService {
         this.handlerCategoryRepository = handlerCategoryRepository;
         this.passwordEncoder = passwordEncoder;
         this.currentUser = currentUser;
-        this.db = db;
         this.staffDirectory = staffDirectory;
         this.events = events;
     }
 
     @Transactional(readOnly = true)
     public Page<EmployeeResponse> list(Pageable pageable) {
-        db.begin(currentUser.get());
         return employeeRepository.findAll(pageable).map(EmployeeResponse::from);
     }
 
     @Transactional(readOnly = true)
     public EmployeeResponse get(Long id) {
-        db.begin(currentUser.get());
         return EmployeeResponse.from(load(id));
     }
 
     @Transactional
     public EmployeeResponse create(NewEmployee body) {
-        db.begin(currentUser.get());
         String email = body.email().trim().toLowerCase(Locale.ROOT);
         checkEmailFree(email);
 
@@ -82,7 +77,7 @@ public class EmployeeService {
         e.setSurname(body.surname().trim());
         e.setEmail(email);
         e.setPassword(passwordEncoder.encode(body.password()));
-        e.setPhone(body.phone());
+        e.setPhone(Text.blankToNull(body.phone()));
         e.setRole(body.role());
         e.setDateOfBirth(body.dateOfBirth());
         e.setStreet(body.street());
@@ -102,7 +97,6 @@ public class EmployeeService {
     @Transactional
     public EmployeeResponse update(Long id, EmployeePatch body) {
         CurrentUser actor = currentUser.get();
-        db.begin(actor);
         Employee e = load(id);
 
         boolean wasActiveStaff = e.isActive() && e.getRole() == Employee.Role.STAFF;
@@ -124,7 +118,7 @@ public class EmployeeService {
         if (body.firstName() != null) e.setFirstName(body.firstName().trim());
         if (body.surname() != null) e.setSurname(body.surname().trim());
         if (body.password() != null) e.setPassword(passwordEncoder.encode(body.password()));
-        if (body.phone() != null) e.setPhone(body.phone());
+        if (body.phone() != null) e.setPhone(Text.blankToNull(body.phone())); // "" clears it
         if (body.role() != null) e.setRole(body.role());
         if (body.active() != null) e.setActive(body.active());
         if (body.dateOfBirth() != null) e.setDateOfBirth(body.dateOfBirth());
@@ -143,7 +137,6 @@ public class EmployeeService {
 
     @Transactional(readOnly = true)
     public List<CategoryResponse> categories(Long empId) {
-        db.begin(currentUser.get());
         load(empId);
         return handlerCategoryRepository.findByEmployee(empId).stream()
                 .map(hc -> CategoryResponse.from(hc.getCategory())).toList();
@@ -151,16 +144,19 @@ public class EmployeeService {
 
     @Transactional(readOnly = true)
     public List<HandlerOption> handlersFor(Long catId) {
-        db.begin(currentUser.get());
         if (!categoryRepository.existsById(catId)) {
             throw Errors.notFound("Category");
         }
         return staffDirectory.activeHandlersFor(catId);
     }
 
+    /**
+     * Replaces a handler's categories. Their open requests in any category they lose are released
+     * (StaffMemberRemovedEvent), because they can no longer see or act on them (FR-005).
+     */
     @Transactional
     public List<CategoryResponse> replaceCategories(Long empId, HandlerCategoriesUpdate body) {
-        db.begin(currentUser.get());
+        CurrentUser actor = currentUser.get();
         Employee employee = load(empId);
         if (employee.getRole() != Employee.Role.STAFF) {
             throw Errors.invalidField("id", "Only staff members have handler categories");
@@ -174,18 +170,24 @@ public class EmployeeService {
 
         List<HandlerCategory> current = handlerCategoryRepository.findByEmployee(empId);
         Set<Long> have = new HashSet<>();
+        Set<Long> removed = new HashSet<>();
         for (HandlerCategory hc : current) {
             Long catId = hc.getCategory().getCatId();
             if (wanted.contains(catId)) {
                 have.add(catId);
             } else {
                 handlerCategoryRepository.delete(hc);
+                removed.add(catId);
             }
         }
         for (Category c : categories) {
             if (!have.contains(c.getCatId())) {
                 handlerCategoryRepository.save(new HandlerCategory(employee, c));
             }
+        }
+        if (!removed.isEmpty()) {
+            handlerCategoryRepository.flush();
+            events.publishEvent(new StaffMemberRemovedEvent(empId, actor.id(), "removed from the category", removed));
         }
         return categories.stream().map(CategoryResponse::from).toList();
     }

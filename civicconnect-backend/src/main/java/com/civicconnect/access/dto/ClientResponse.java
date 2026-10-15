@@ -1,9 +1,10 @@
 package com.civicconnect.access.dto;
 
+import com.civicconnect.common.time.Time;
 import com.civicconnect.access.domain.Client;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 public record ClientResponse(
         Long id,
@@ -13,10 +14,10 @@ public record ClientResponse(
         String phone,
         LocalDate dateOfBirth,
         boolean active,
-        LocalDateTime createdAt
+        Instant createdAt
 ) {
     public static ClientResponse from(Client c) {
         return new ClientResponse(c.getClientId(), c.getFirstName(), c.getSurname(), c.getEmail(), c.getPhone(),
-                c.getDateOfBirth(), c.isActive(), c.getCreatedAt());
+                c.getDateOfBirth(), c.isActive(), Time.toInstant(c.getCreatedAt()));
     }
 }

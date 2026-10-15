@@ -15,7 +15,7 @@ import java.util.stream.Collectors;
 /**
  * What other modules may ask the Access module about staff (ARC-02: only the owning module reads its
  * tables). Used by Requests for category scope (FR-005), handler checks (FR-008) and display names.
- * Callers are already inside a transaction that DbSession has switched to the user's database role.
+ * Runs in the caller's transaction, under the logged-in user's database role (DbSessionInterceptor).
  */
 @Service
 public class StaffDirectory {

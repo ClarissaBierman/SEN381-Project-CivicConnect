@@ -3,8 +3,10 @@ import { roleGuard } from './core/role.guard';
 import { LoginPage } from './features/login/login-page';
 import { CategoriesPage } from './features/management/categories-page';
 import { ActivityPage } from './features/management/activity-page';
-import { PlannedPage } from './features/planned-page';
+import { AuditPage } from './features/management/audit-page';
+import { StaffPage } from './features/management/staff-page';
 import { RequestQueuePage } from './features/handler/request-queue-page';
+import { ProfilePage } from './features/requester/profile-page';
 import { RequesterPage } from './features/requester/requester-page';
 import { RegisterPage } from './features/register/register-page';
 
@@ -26,19 +28,25 @@ export const routes: Routes = [
     canActivate: [roleGuard],
     data: { roles: ['REQUESTER'] },
   },
+  {
+    path: 'requests/profile',
+    component: ProfilePage,
+    canActivate: [roleGuard],
+    data: { roles: ['REQUESTER'] },
+  },
 
   // Wireframe 2 - handler queue. Managers reuse it for "Requests" (all categories).
   {
     path: 'staff/requests',
     component: RequestQueuePage,
     canActivate: [roleGuard],
-    data: { roles: ['HANDLER'] },
+    data: { roles: ['STAFF'] },
   },
   {
     path: 'management/requests',
     component: RequestQueuePage,
     canActivate: [roleGuard],
-    data: { roles: ['MANAGER'] },
+    data: { roles: ['MANAGEMENT'] },
   },
 
   // Wireframe 3 + other Management-only screens
@@ -46,23 +54,25 @@ export const routes: Routes = [
     path: 'management/activity',
     component: ActivityPage,
     canActivate: [roleGuard],
-    data: { roles: ['MANAGER'] },
+    data: { roles: ['MANAGEMENT'] },
   },
   {
     path: 'management/categories',
     component: CategoriesPage,
     canActivate: [roleGuard],
-    data: { roles: ['MANAGER'] },
+    data: { roles: ['MANAGEMENT'] },
   },
   {
-    path: 'management/handler-categories',
-    component: PlannedPage,
+    path: 'management/staff',
+    component: StaffPage,
     canActivate: [roleGuard],
-    data: {
-      roles: ['MANAGER'],
-      title: 'Handler categories',
-      note: 'FR-005, API-16 GET/PUT /employees/{id}/categories - Planned.',
-    },
+    data: { roles: ['MANAGEMENT'] },
+  },
+  {
+    path: 'management/audit',
+    component: AuditPage,
+    canActivate: [roleGuard],
+    data: { roles: ['MANAGEMENT'] },
   },
 
   { path: '', pathMatch: 'full', redirectTo: 'login' },

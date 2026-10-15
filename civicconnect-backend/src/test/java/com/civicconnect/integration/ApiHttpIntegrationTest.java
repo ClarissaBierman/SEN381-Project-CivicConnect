@@ -32,7 +32,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * @PreAuthorize role rules, controllers, services, database roles, audit trigger and migrations V3/V4.
  * Uses the dummy data from database/civicconnect_supabase_build.sql:
  *   clients 1 Thabo, 2 Naledi, 6 Fatima (deactivated); employees 1 Lerato (manager),
- *   2 Johan (staff: Facility Faults 1, Maintenance 5, Other 7), 3 Ayesha (staff: 2, 4), 5 Megan (deactivated).
+ *   2 Johan (staff: Facility Faults 1, Maintenance 5, Other 7), 3 Ayesha (staff: 2, 4), 5 Megan (deactivated),
+ *   6 the default manager admin@gmail.com. Johan handles request 5 (In Progress) and 7 (Closed).
  *
  * Every test runs in one transaction that is rolled back, so nothing is left behind.
  * Tagged "integration": run with  .\mvnw test -Pintegration
@@ -129,11 +130,25 @@ class ApiHttpIntegrationTest {
                 .andExpect(jsonPath("$.handlerId").value(nullValue()))
                 .andExpect(jsonPath("$.comments[0].content").value(containsString("returned to the queue")))
                 .andExpect(jsonPath("$.comments[0].visibleToRequester").value(false));
+
+        // His other open request waits for a manager; his closed request is not touched (FR-011)
+        call(get("/api/v1/requests/5"), manager(LERATO))
+                .andExpect(jsonPath("$.status").value("IN_PROGRESS"))
+                .andExpect(jsonPath("$.handlerId").value(nullValue()));
+        String before = jdbc.queryForObject("select updated_at::text from request where req_id = 7", String.class);
+        call(get("/api/v1/requests/7"), manager(LERATO))
+                .andExpect(jsonPath("$.status").value("CLOSED"))
+                .andExpect(jsonPath("$.handlerId").value(JOHAN))
+                .andExpect(content().string(not(containsString("Handler removed"))));
+        assertThat(jdbc.queryForObject("select updated_at::text from request where req_id = 7", String.class)).isEqualTo(before);
     }
 
     @Test
     @DisplayName("The only active manager cannot deactivate themselves (422 LAST_MANAGER)")
     void lastManagerCannotBeDeactivated() throws Exception {
+        long admin = jdbc.queryForObject("select emp_id from employee where email = 'admin@gmail.com'", Long.class);
+        call(patch("/api/v1/employees/" + admin).content("{\"active\":false}"), manager(LERATO))
+                .andExpect(status().isOk());
         call(patch("/api/v1/employees/" + LERATO).content("{\"active\":false}"), manager(LERATO))
                 .andExpect(status().isUnprocessableContent())
                 .andExpect(jsonPath("$.code").value("LAST_MANAGER"));
@@ -244,5 +259,101 @@ class ApiHttpIntegrationTest {
         assertThat(refused.getResponse().getContentAsString()).contains("TOO_MANY_REQUESTS");
 
         call(get("/api/v1/categories"), requester(THABO)).andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("Removing a handler's category releases their open requests in it back to the queue")
+    void removingCategoryReleasesRequests() throws Exception {
+        long id = submitRequest(THABO, FACILITY_FAULTS);
+        call(post("/api/v1/requests/" + id + "/assignment"), staff(JOHAN)).andExpect(status().isOk());
+
+        call(put("/api/v1/employees/" + JOHAN + "/categories").content("{\"categoryIds\":[5,7]}"), manager(LERATO))
+                .andExpect(status().isOk());
+
+        call(get("/api/v1/requests/" + id), manager(LERATO))
+                .andExpect(jsonPath("$.status").value("NEW"))
+                .andExpect(jsonPath("$.handlerId").value(nullValue()));
+        call(get("/api/v1/requests/" + id), staff(JOHAN)).andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("The default manager from the build script can log in")
+    void defaultManagerCanLogIn() throws Exception {
+        call(post("/api/v1/auth/login").content("{\"email\":\"admin@gmail.com\",\"password\":\"Password.123\"}"), null)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.role").value("MANAGEMENT"));
+    }
+
+    @Test
+    @DisplayName("Priority sort: High, Medium, Low, then unset")
+    void prioritySortOrder() throws Exception {
+        long low = submitRequest(THABO, 4), high = submitRequest(THABO, 4), medium = submitRequest(THABO, 4);
+        for (long[] p : new long[][] {{low, 0}, {high, 2}, {medium, 1}}) {
+            String level = new String[] {"LOW", "MEDIUM", "HIGH"}[(int) p[1]];
+            call(patch("/api/v1/requests/" + p[0] + "/priority").content("{\"priority\":\"" + level + "\"}"), manager(LERATO))
+                    .andExpect(status().isOk());
+        }
+        call(get("/api/v1/requests?categoryId=4&sort=priority,desc&size=100"), manager(LERATO))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].id").value(high))
+                .andExpect(jsonPath("$.content[1].id").value(medium))
+                .andExpect(jsonPath("$.content[2].id").value(low))
+                .andExpect(jsonPath("$.content[3].priority").value(nullValue()))
+                .andExpect(jsonPath("$.page.totalElements").isNumber());
+    }
+
+    @Test
+    @DisplayName("open=true and unassigned=true filters")
+    void openAndUnassignedFilters() throws Exception {
+        // Seed data: open and unassigned are requests 1, 2 and 11
+        call(get("/api/v1/requests?open=true&unassigned=true&sort=refNum,asc"), manager(LERATO))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.totalElements").value(3))
+                .andExpect(jsonPath("$.content[0].id").value(1))
+                .andExpect(jsonPath("$.content[2].id").value(11));
+        call(get("/api/v1/requests?open=true"), manager(LERATO))
+                .andExpect(jsonPath("$.page.totalElements").value(7));
+    }
+
+    @Test
+    @DisplayName("Requesters get the status history of their request; staff who are not the handler get no status options")
+    void statusHistoryAndAllowedTransitions() throws Exception {
+        long id = submitRequest(THABO, 4);
+        call(post("/api/v1/requests/" + id + "/assignment"), staff(AYESHA)).andExpect(status().isOk());
+        call(patch("/api/v1/requests/" + id + "/status").content("{\"toStatus\":\"IN_PROGRESS\"}"), staff(AYESHA))
+                .andExpect(status().isOk());
+        call(patch("/api/v1/requests/" + id + "/priority").content("{\"priority\":\"HIGH\"}"), manager(LERATO))
+                .andExpect(status().isOk());
+
+        call(get("/api/v1/requests/" + id), requester(THABO))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statusHistory.length()").value(3))
+                .andExpect(jsonPath("$.statusHistory[0].status").value("NEW"))
+                .andExpect(jsonPath("$.statusHistory[2].status").value("IN_PROGRESS"))
+                .andExpect(jsonPath("$.statusHistory[2].at").value(endsWith("Z")))
+                .andExpect(content().string(not(containsString("Ayesha"))));
+
+        call(put("/api/v1/employees/" + JOHAN + "/categories").content("{\"categoryIds\":[1,4,5,7]}"), manager(LERATO))
+                .andExpect(status().isOk());
+        call(get("/api/v1/requests/" + id), staff(JOHAN))
+                .andExpect(jsonPath("$.allowedTransitions.length()").value(0));
+        call(get("/api/v1/requests/" + id), staff(AYESHA))
+                .andExpect(jsonPath("$.allowedTransitions[0]").value("RESOLVED"));
+    }
+
+    @Test
+    @DisplayName("Descriptions over 2000 characters are refused")
+    void descriptionLimit() throws Exception {
+        call(post("/api/v1/requests").content("{\"categoryId\":4,\"description\":\"" + "a".repeat(2001)
+                + "\",\"location\":\"Hall\"}"), requester(THABO))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("description"));
+    }
+
+    @Test
+    @DisplayName("A requester cannot open an inactive category by ID")
+    void inactiveCategoryHidden() throws Exception {
+        call(get("/api/v1/categories/8"), requester(THABO)).andExpect(status().isNotFound());
+        call(get("/api/v1/categories/8"), manager(LERATO)).andExpect(status().isOk());
     }
 }

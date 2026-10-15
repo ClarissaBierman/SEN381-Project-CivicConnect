@@ -13,13 +13,15 @@ const NAV: Record<Role, NavLink[]> = {
   REQUESTER: [
     { path: '/requests/mine', label: 'My Requests' },
     { path: '/requests/new', label: 'New Request' },
+    { path: '/requests/profile', label: 'Profile' },
   ],
-  HANDLER: [{ path: '/staff/requests', label: 'Requests' }],
-  MANAGER: [
+  STAFF: [{ path: '/staff/requests', label: 'Requests' }],
+  MANAGEMENT: [
     { path: '/management/activity', label: 'Activity' },
     { path: '/management/requests', label: 'Requests' },
     { path: '/management/categories', label: 'Categories' },
-    { path: '/management/handler-categories', label: 'Handler categories' },
+    { path: '/management/staff', label: 'Staff' },
+    { path: '/management/audit', label: 'Audit' },
   ],
 };
 

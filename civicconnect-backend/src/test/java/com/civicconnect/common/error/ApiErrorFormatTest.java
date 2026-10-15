@@ -153,7 +153,7 @@ class ApiErrorFormatTest {
     @Test
     @DisplayName("A sort the endpoint allows reaches the service")
     void allowedSortPasses() throws Exception {
-        when(service.list(any(), any(), any(), any(), any())).thenReturn(org.springframework.data.domain.Page.empty());
+        when(service.list(any(), any())).thenReturn(org.springframework.data.domain.Page.empty());
 
         mvc.perform(get("/api/v1/requests?sort=priority,desc")).andExpect(status().isOk());
     }
@@ -161,7 +161,7 @@ class ApiErrorFormatTest {
     @Test
     @DisplayName("Safety net: a PropertyReferenceException from any paged query is 400, not 500")
     void propertyReferenceIs400() throws Exception {
-        when(service.list(any(), any(), any(), any(), any())).thenThrow(new org.springframework.data.core.PropertyReferenceException(
+        when(service.list(any(), any())).thenThrow(new org.springframework.data.core.PropertyReferenceException(
                 "nope", org.springframework.data.core.TypeInformation.of(com.civicconnect.requests.domain.ServiceRequest.class),
                 java.util.List.of()));
 

@@ -28,9 +28,11 @@ import { HOME_ROUTE, SessionService } from '../../core/session.service';
             formControlName="email"
             autocomplete="username"
             [class.invalid]="showError('email')"
+            [attr.aria-invalid]="showError('email')"
+            [attr.aria-describedby]="showError('email') ? 'email-error' : null"
           />
           @if (showError('email')) {
-            <span class="error">Enter a valid email address.</span>
+            <span class="error" id="email-error">Enter a valid email address.</span>
           }
         </div>
 
@@ -42,9 +44,11 @@ import { HOME_ROUTE, SessionService } from '../../core/session.service';
             formControlName="password"
             autocomplete="current-password"
             [class.invalid]="showError('password')"
+            [attr.aria-invalid]="showError('password')"
+            [attr.aria-describedby]="showError('password') ? 'password-error' : null"
           />
           @if (showError('password')) {
-            <span class="error">Enter your password.</span>
+            <span class="error" id="password-error">Enter your password.</span>
           }
         </div>
 
@@ -86,6 +90,7 @@ export class LoginPage {
     const params = inject(ActivatedRoute).snapshot.queryParamMap;
     if (params.has('registered')) this.notice.set('Account created. You can log in now.');
     if (params.has('expired')) this.notice.set('Your session has expired. Please log in again.');
+    if (params.has('deactivated')) this.notice.set('Your account is no longer active. Please contact CivicConnect.');
   }
 
   protected showError(field: 'email' | 'password'): boolean {

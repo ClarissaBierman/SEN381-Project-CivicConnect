@@ -1,5 +1,6 @@
 package com.civicconnect.access.service;
 
+import com.civicconnect.common.web.Text;
 import com.civicconnect.access.domain.Client;
 import com.civicconnect.access.domain.Employee;
 import com.civicconnect.access.dto.AuthResponse;
@@ -15,6 +16,7 @@ import com.civicconnect.common.error.Errors;
 import com.civicconnect.common.ratelimit.LoginAttemptLimiter;
 import com.civicconnect.common.ratelimit.RateLimitedException;
 import com.civicconnect.common.ratelimit.TokenBucketLimiter;
+import com.civicconnect.common.security.AppRoleOnly;
 import com.civicconnect.common.security.CurrentUser;
 import com.civicconnect.common.security.CurrentUserService;
 import com.civicconnect.common.security.JwtService;
@@ -60,6 +62,7 @@ public class AuthService {
     }
 
     @Transactional
+    @AppRoleOnly
     public ClientResponse register(RegisterRequest body) {
         String email = body.email().trim().toLowerCase(Locale.ROOT);
         long retryAfter = registrationLimiter.tryConsume(email);
@@ -74,7 +77,7 @@ public class AuthService {
         client.setFirstName(body.firstName().trim());
         client.setSurname(body.surname().trim());
         client.setEmail(email);
-        client.setPhone(body.phone());
+        client.setPhone(Text.blankToNull(body.phone()));
         client.setPassword(passwordEncoder.encode(body.password()));
         return ClientResponse.from(clientRepository.save(client));
     }
@@ -85,6 +88,7 @@ public class AuthService {
      * and deactivated accounts all cost one BCrypt check and give the same 401 message.
      */
     @Transactional(readOnly = true)
+    @AppRoleOnly
     public AuthResponse login(LoginRequest body) {
         String email = body.email().trim();
         loginLimiter.checkAllowed(email);
@@ -107,7 +111,9 @@ public class AuthService {
         return token(new CurrentUser(c.getClientId(), CurrentUser.Role.REQUESTER));
     }
 
+    /** Runs as the app's login role: staff may not read their own email column through their database role. */
     @Transactional(readOnly = true)
+    @AppRoleOnly
     public MeResponse me() {
         CurrentUser user = currentUser.get();
         if (user.isRequester()) {

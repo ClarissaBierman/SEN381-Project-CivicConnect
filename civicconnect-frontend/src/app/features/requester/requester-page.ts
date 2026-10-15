@@ -1,12 +1,16 @@
 import { DatePipe } from '@angular/common';
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, DestroyRef, inject, OnInit, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { finalize } from 'rxjs/operators';
+import { of, Subject } from 'rxjs';
+import { catchError, finalize, switchMap, tap } from 'rxjs/operators';
 import { Category } from '../../category';
-import { ApiProblem, CreatedRequest, RequestDetail, RequestSummary } from '../../core/models';
+import { ApiProblem, CreatedRequest, Page, RequestDetail, RequestSummary } from '../../core/models';
 import { problemMessage } from '../../core/problem-message';
 import { RequestApiService } from '../../core/request-api.service';
 import { StatusBadge } from '../../shared/status-badge';
+
+const PAGE_SIZE = 10;
 
 type Field = 'categoryId' | 'description' | 'location' | 'attachmentUrl';
 
@@ -26,9 +30,14 @@ const FIELD_LABELS: Record<Field, string> = {
 export class RequesterPage implements OnInit {
   private readonly api = inject(RequestApiService);
   private readonly fb = inject(FormBuilder);
+  private readonly destroyRef = inject(DestroyRef);
+  // Each click cancels the previous request's load, so only the last one clicked is shown
+  private readonly selection = new Subject<number>();
 
   protected readonly categories = signal<Category[]>([]);
-  protected readonly myRequests = signal<RequestSummary[]>([]);
+  protected readonly myRequests = signal<Page<RequestSummary> | null>(null);
+  protected readonly pageIndex = signal(0);
+  protected readonly detailError = signal<string | null>(null);
   protected readonly selected = signal<RequestDetail | null>(null);
   protected readonly confirmation = signal<CreatedRequest | null>(null);
   protected readonly serverErrors = signal<Partial<Record<Field, string>>>({});
@@ -47,6 +56,25 @@ export class RequesterPage implements OnInit {
   ngOnInit(): void {
     // Marker 2: dropdown comes from API-13 (active categories only), no free text.
     this.api.getCategories().subscribe((c) => this.categories.set(c));
+    this.selection
+      .pipe(
+        tap(() => this.detailError.set(null)),
+        switchMap((id) =>
+          this.api.getRequest(id).pipe(
+            catchError((p) => {
+              this.detailError.set(problemMessage(p));
+              return of(null);
+            }),
+          ),
+        ),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((detail) => this.selected.set(detail));
+    this.loadMine();
+  }
+
+  protected goToPage(delta: number): void {
+    this.pageIndex.update((p) => p + delta);
     this.loadMine();
   }
 
@@ -89,6 +117,7 @@ export class RequesterPage implements OnInit {
         next: (created) => {
           this.confirmation.set(created); // marker 7
           this.cancel();
+          this.pageIndex.set(0);
           this.loadMine();
           this.select(created.id);
         },
@@ -105,17 +134,17 @@ export class RequesterPage implements OnInit {
 
   protected select(id: number): void {
     // Marker 5: API-06 - another client's request returns 404.
-    this.api.getRequest(id).subscribe({
-      next: (detail) => this.selected.set(detail),
-      error: (p) => this.formError.set(problemMessage(p)),
-    });
+    this.selection.next(id);
   }
 
   private loadMine(): void {
     // Marker 4: API-05 - own requests only, newest first, paged.
-    this.api.getMyRequests(0, 20).subscribe((page) => {
-      this.myRequests.set(page.content);
-      if (!this.selected() && page.content.length) this.select(page.content[0].id);
+    this.api.getMyRequests(this.pageIndex(), PAGE_SIZE).subscribe({
+      next: (page) => {
+        this.myRequests.set(page);
+        if (!this.selected() && page.content.length) this.select(page.content[0].id);
+      },
+      error: (p) => this.detailError.set(problemMessage(p)),
     });
   }
 
