@@ -22,6 +22,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.beans.factory.annotation.Qualifier;
+import com.civicconnect.common.error.FilterErrorHandler;
 import com.civicconnect.common.error.ProblemWriter;
 import com.civicconnect.common.ratelimit.ApiRateLimitFilter;
 import com.civicconnect.common.ratelimit.TokenBucketLimiter;
@@ -40,7 +41,9 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http, SecurityProblemHandler problems,
                                                    AccountStatusLookup accounts, ProblemWriter problemWriter,
-                                                   @Qualifier("apiRequestLimiter") TokenBucketLimiter apiLimiter)
+                                                   @Qualifier("apiRequestLimiter") TokenBucketLimiter apiLimiter,
+                                                   @Qualifier("ipRequestLimiter") TokenBucketLimiter ipLimiter,
+                                                   @Qualifier("authIpLimiter") TokenBucketLimiter authIpLimiter)
             throws Exception {
         http
                 .csrf(csrf -> csrf.disable())              // no cookies are used, so CSRF does not apply
@@ -56,8 +59,11 @@ public class SecurityConfig {
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(new ActiveAccountJwtConverter(accounts)))
                         .authenticationEntryPoint(problems)
                         .accessDeniedHandler(problems))
-                // B4: per-account rate limit, after the token is verified so the account is known
-                .addFilterAfter(new ApiRateLimitFilter(apiLimiter, problemWriter), BearerTokenAuthenticationFilter.class);
+                // Errors thrown in the filters (e.g. the database is down during the account check) -> PED body
+                .addFilterBefore(new FilterErrorHandler(problemWriter), BearerTokenAuthenticationFilter.class)
+                // B4: per-IP and per-account rate limits, after the token is verified so the account is known
+                .addFilterAfter(new ApiRateLimitFilter(apiLimiter, ipLimiter, authIpLimiter, problemWriter),
+                        BearerTokenAuthenticationFilter.class);
         return http.build();
     }
 

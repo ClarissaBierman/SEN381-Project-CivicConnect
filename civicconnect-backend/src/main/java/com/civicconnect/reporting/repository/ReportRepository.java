@@ -10,7 +10,7 @@ import java.util.List;
 /**
  * The Reporting module's read-only query repository (ARC-02 exception): plain SQL aggregates over the
  * request and category tables. It owns no entities and returns no personal fields (ASR-005).
- * Runs on the caller's transaction, so DbSession's database role applies.
+ * Runs on the caller's transaction, so the user's database role applies (DbSessionInterceptor).
  */
 @Repository
 public class ReportRepository {

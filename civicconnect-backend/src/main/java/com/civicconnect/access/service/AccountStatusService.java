@@ -4,6 +4,7 @@ import com.civicconnect.access.domain.Employee;
 import com.civicconnect.access.repository.ClientRepository;
 import com.civicconnect.access.repository.EmployeeRepository;
 import com.civicconnect.common.security.AccountStatusLookup;
+import com.civicconnect.common.security.AppRoleOnly;
 import com.civicconnect.common.security.CurrentUser;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,7 +13,7 @@ import java.util.Optional;
 
 /**
  * B1: the security layer asks this on every request whether the account in the token may still act.
- * Runs before DbSession switches role, as the application's login role, which can read these columns.
+ * Runs as the application's login role (@AppRoleOnly), which can read these columns.
  */
 @Service
 public class AccountStatusService implements AccountStatusLookup {
@@ -27,6 +28,7 @@ public class AccountStatusService implements AccountStatusLookup {
 
     @Override
     @Transactional(readOnly = true)
+    @AppRoleOnly
     public Optional<AccountState> find(CurrentUser.Role tokenRole, long id) {
         if (tokenRole == CurrentUser.Role.REQUESTER) {
             return clients.findActive(id).map(active -> new AccountState(active, CurrentUser.Role.REQUESTER));

@@ -9,7 +9,6 @@ import com.civicconnect.common.error.ApiException;
 import com.civicconnect.common.error.ErrorCode;
 import com.civicconnect.common.security.CurrentUser;
 import com.civicconnect.common.security.CurrentUserService;
-import com.civicconnect.common.security.DbSession;
 import com.civicconnect.requests.domain.Category;
 import com.civicconnect.requests.domain.Comment;
 import com.civicconnect.requests.domain.RequestHandler;
@@ -26,6 +25,18 @@ import com.civicconnect.requests.repository.RequestRepository;
 import com.civicconnect.requests.domain.ServiceRequest.Priority;
 import com.civicconnect.requests.domain.ServiceRequest.Status;
 import jakarta.persistence.EntityManager;
+import com.civicconnect.requests.dto.RequestSummary;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Expression;
+import jakarta.persistence.criteria.Root;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import java.time.LocalDate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -56,7 +67,6 @@ class RequestServiceTest {
     private CommentRepository commentRepository;
     private HandlerCategoryRepository scopeRepository;
     private CurrentUserService currentUser;
-    private DbSession db;
     private RequestService service;
 
     private final Category itSupport = category(4, "IT Support", true);
@@ -70,12 +80,11 @@ class RequestServiceTest {
         commentRepository = mock(CommentRepository.class);
         scopeRepository = mock(HandlerCategoryRepository.class);
         currentUser = mock(CurrentUserService.class);
-        db = mock(DbSession.class);
 
         StaffDirectory staff = new StaffDirectory(employeeRepository, scopeRepository);
         RequestAccess access = new RequestAccess(requestRepository, staff);
         service = new RequestService(requestRepository, categoryRepository, handlerRepository, commentRepository,
-                staff, new TransitionPolicy(), access, new CommentViews(commentRepository, staff), currentUser, db);
+                staff, new TransitionPolicy(), access, new CommentViews(commentRepository, staff), currentUser);
 
         // getReference() returns a stand-in entity with just the ID, like Hibernate does
         EntityManager em = mock(EntityManager.class);
@@ -126,7 +135,6 @@ class RequestServiceTest {
         assertThat(saved.getValue().getRequester().getClientId()).isEqualTo(1L);
         assertThat(saved.getValue().getDescription()).isEqualTo("Printer jammed");
         assertThat(detail.allowedTransitions()).as("requesters never get allowedTransitions").isNull();
-        verify(db).begin(requester(1));
     }
 
     @Test
@@ -407,5 +415,167 @@ class RequestServiceTest {
         RequestDetail seenByRequester = service.get(10L);
         assertThat(seenByRequester.handlerName()).isNull();
         assertThat(seenByRequester.handlerId()).isNull();
+    }
+
+    @Test
+    @DisplayName("Manager list applies every filter and shows each request's handler name")
+    @SuppressWarnings("unchecked")
+    void managerListAppliesFiltersAndNames() {
+        loggedInAs(manager(1));
+        ServiceRequest a = request(10, Status.ASSIGNED, itSupport, 1);
+        ServiceRequest b = request(11, Status.NEW, itSupport, 2);
+        when(requestRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(a, b)));
+        when(handlerRepository.findActiveHandlerIds(List.of(10L, 11L))).thenReturn(List.<Object[]>of(new Object[] {10L, 3L}));
+        EmployeeRepository.EmployeeName name = mock(EmployeeRepository.EmployeeName.class);
+        when(name.getId()).thenReturn(3L);
+        when(name.fullName()).thenReturn("Ayesha Patel");
+        when(employeeRepository.findNames(List.of(3L))).thenReturn(List.of(name));
+
+        Page<RequestSummary> page = service.list(new RequestFilter(Status.ASSIGNED, false, false, 4L,
+                LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 31)), PageRequest.of(0, 20));
+
+        assertThat(page.getContent()).extracting(RequestSummary::handlerName).containsExactly("Ayesha Patel", null);
+        ArgumentCaptor<Specification<ServiceRequest>> spec = ArgumentCaptor.forClass(Specification.class);
+        verify(requestRepository).findAll(spec.capture(), any(Pageable.class));
+        Root<ServiceRequest> root = mock(Root.class, RETURNS_DEEP_STUBS);
+        CriteriaBuilder cb = mock(CriteriaBuilder.class, RETURNS_DEEP_STUBS);
+        spec.getValue().toPredicate(root, mock(CriteriaQuery.class), cb);
+        verify(cb).equal(root.get("status"), Status.ASSIGNED);
+        verify(cb).greaterThanOrEqualTo(any(Expression.class), eq(LocalDate.of(2026, 10, 1).atStartOfDay()));
+        verify(cb).lessThan(any(Expression.class), eq(LocalDate.of(2026, 11, 1).atStartOfDay()));
+    }
+
+    @Test
+    @DisplayName("Staff without categories get an empty list without a query; staff with categories are scoped")
+    @SuppressWarnings("unchecked")
+    void staffListIsScoped() {
+        loggedInAs(staff(9));
+        assertThat(service.list(RequestFilter.none(), PageRequest.of(0, 20))).isEmpty();
+        verify(requestRepository, never()).findAll(any(Specification.class), any(Pageable.class));
+
+        loggedInAs(staff(3));
+        when(requestRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(Page.empty());
+        service.list(RequestFilter.none(), PageRequest.of(0, 20));
+        ArgumentCaptor<Specification<ServiceRequest>> spec = ArgumentCaptor.forClass(Specification.class);
+        verify(requestRepository).findAll(spec.capture(), any(Pageable.class));
+        Root<ServiceRequest> root = mock(Root.class, RETURNS_DEEP_STUBS);
+        spec.getValue().toPredicate(root, mock(CriteriaQuery.class), mock(CriteriaBuilder.class, RETURNS_DEEP_STUBS));
+        verify(root.get("category").get("catId")).in(List.of(2L, 4L));
+        verify(handlerRepository, never()).findActiveHandlerIds(any());
+    }
+
+    @Test
+    @DisplayName("A requester's own list has no handler details")
+    @SuppressWarnings("unchecked")
+    void mineHasNoHandler() {
+        loggedInAs(requester(1));
+        when(requestRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(request(10, Status.NEW, itSupport, 1))));
+
+        assertThat(service.mine(PageRequest.of(0, 20)).getContent().get(0).handlerId()).isNull();
+    }
+
+    @Test
+    @DisplayName("Manager assignment errors: no employee given, unknown employee, a manager, the same handler again")
+    void managerAssignmentErrors() {
+        loggedInAs(manager(1));
+        ServiceRequest r = existing(10, Status.ASSIGNED);
+        when(employeeRepository.findById(1L)).thenReturn(Optional.of(employee(1, Employee.Role.MANAGEMENT, true)));
+        when(employeeRepository.findById(3L)).thenReturn(Optional.of(employee(3, Employee.Role.STAFF, true)));
+        activeHandler(r, 3);
+
+        assertApiError(ErrorCode.VALIDATION_FAILED, () -> service.assign(10L, null));
+        assertApiError(ErrorCode.VALIDATION_FAILED, () -> service.assign(10L, new AssignmentRequest(null)));
+        assertApiError(ErrorCode.VALIDATION_FAILED, () -> service.assign(10L, new AssignmentRequest(77L)));
+        assertApiError(ErrorCode.VALIDATION_FAILED, () -> service.assign(10L, new AssignmentRequest(1L)));
+        assertApiError(ErrorCode.ALREADY_ASSIGNED, () -> service.assign(10L, new AssignmentRequest(3L)));
+    }
+
+    @Test
+    @DisplayName("Resolved requests cannot be reassigned; a lost race on the database index is ALREADY_ASSIGNED")
+    void assignmentEdgeCases() {
+        loggedInAs(manager(1));
+        existing(10, Status.RESOLVED);
+        assertApiError(ErrorCode.INVALID_TRANSITION, () -> service.assign(10L, new AssignmentRequest(3L)));
+
+        loggedInAs(staff(3));
+        existing(11, Status.NEW);
+        doThrow(new DataIntegrityViolationException("ux_request_handler_active")).when(handlerRepository).flush();
+        assertApiError(ErrorCode.ALREADY_ASSIGNED, () -> service.assign(11L, new AssignmentRequest(3L)));
+    }
+
+    @Test
+    @DisplayName("Rejecting sets closedAt; the same priority again changes nothing")
+    void rejectAndUnchangedPriority() {
+        loggedInAs(manager(1));
+        ServiceRequest r = existing(10, Status.NEW);
+        service.changeStatus(10L, new StatusChangeRequest(Status.REJECTED, "  ", null));
+        assertThat(r.getClosedAt()).isNotNull();
+        verify(commentRepository, never()).save(any());
+
+        ServiceRequest p = existing(12, Status.NEW);
+        p.setPriority(Priority.LOW);
+        p.setUpdatedAt(null);
+        service.setPriority(12L, Priority.LOW);
+        assertThat(p.getUpdatedAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("Staff may reject a New request in their categories without being its handler")
+    void staffRejectsNew() {
+        loggedInAs(staff(3));
+        existing(10, Status.NEW);
+
+        assertThat(service.changeStatus(10L, new StatusChangeRequest(Status.REJECTED, null, null)).status())
+                .isEqualTo(Status.REJECTED);
+    }
+
+    @Test
+    @DisplayName("open=true and unassigned=true add their filters")
+    @SuppressWarnings("unchecked")
+    void openAndUnassignedFilters() {
+        loggedInAs(manager(1));
+        when(requestRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(Page.empty());
+
+        service.list(new RequestFilter(null, true, true, null, null, null), PageRequest.of(0, 20));
+
+        ArgumentCaptor<Specification<ServiceRequest>> spec = ArgumentCaptor.forClass(Specification.class);
+        verify(requestRepository).findAll(spec.capture(), any(Pageable.class));
+        Root<ServiceRequest> root = mock(Root.class, RETURNS_DEEP_STUBS);
+        CriteriaBuilder cb = mock(CriteriaBuilder.class, RETURNS_DEEP_STUBS);
+        CriteriaQuery<?> query = mock(CriteriaQuery.class, RETURNS_DEEP_STUBS);
+        spec.getValue().toPredicate(root, query, cb);
+        verify(root.get("status")).in(ServiceRequest.OPEN_STATUSES);
+        verify(cb).exists(any());
+    }
+
+    @Test
+    @DisplayName("Staff who are not the handler are offered no status changes; the handler and managers are")
+    void allowedTransitionsDependOnTheUser() {
+        ServiceRequest r = existing(10, Status.ASSIGNED);
+        activeHandler(r, 3);
+
+        loggedInAs(staff(3));
+        assertThat(service.get(10L).allowedTransitions()).containsExactlyInAnyOrder(Status.IN_PROGRESS, Status.REJECTED);
+        loggedInAs(staff(5));
+        when(scopeRepository.findCategoryIds(5L)).thenReturn(List.of(4L));
+        assertThat(service.get(10L).allowedTransitions()).isEmpty();
+        loggedInAs(manager(1));
+        assertThat(service.get(10L).allowedTransitions()).containsExactlyInAnyOrder(Status.IN_PROGRESS, Status.REJECTED);
+    }
+
+    @Test
+    @DisplayName("The detail carries the status history from the audit trail, oldest first, as UTC instants")
+    void statusHistory() {
+        existing(10, Status.ASSIGNED);
+        when(requestRepository.statusHistory(10L)).thenReturn(List.of(
+                new Object[] {"NEW", java.sql.Timestamp.valueOf("2026-10-01 08:00:00")},
+                new Object[] {"ASSIGNED", java.time.LocalDateTime.of(2026, 10, 2, 9, 30)}));
+        loggedInAs(requester(1));
+
+        assertThat(service.get(10L).statusHistory()).containsExactly(
+                new com.civicconnect.requests.dto.StatusChange(Status.NEW, java.time.Instant.parse("2026-10-01T08:00:00Z")),
+                new com.civicconnect.requests.dto.StatusChange(Status.ASSIGNED, java.time.Instant.parse("2026-10-02T09:30:00Z")));
     }
 }

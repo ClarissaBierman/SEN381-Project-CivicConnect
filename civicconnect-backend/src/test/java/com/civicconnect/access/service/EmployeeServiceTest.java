@@ -1,5 +1,10 @@
 package com.civicconnect.access.service;
 
+import java.time.LocalDate;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.PageImpl;
+import com.civicconnect.requests.dto.CategoryResponse;
 import com.civicconnect.access.event.StaffMemberRemovedEvent;
 
 import com.civicconnect.access.dto.EmployeePatch;
@@ -13,7 +18,6 @@ import com.civicconnect.access.repository.EmployeeRepository;
 import com.civicconnect.access.repository.HandlerCategoryRepository;
 import com.civicconnect.common.error.ErrorCode;
 import com.civicconnect.common.security.CurrentUserService;
-import com.civicconnect.common.security.DbSession;
 import com.civicconnect.requests.repository.CategoryRepository;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -53,7 +57,7 @@ class EmployeeServiceTest {
         when(currentUser.get()).thenReturn(manager(1));
         events = mock(ApplicationEventPublisher.class);
         service = new EmployeeService(employees, clients, categories, scope,
-                new BCryptPasswordEncoder(4), currentUser, mock(DbSession.class), new StaffDirectory(employees, scope), events);
+                new BCryptPasswordEncoder(4), currentUser, new StaffDirectory(employees, scope), events);
         when(employees.save(any())).thenAnswer(i -> i.getArgument(0));
     }
 
@@ -96,6 +100,21 @@ class EmployeeServiceTest {
         verify(scope).save(argThat(hc -> hc.getCategory().getCatId().equals(9L)));
         verify(scope, times(1)).save(any());
         assertThat(result).extracting("catName").containsExactlyInAnyOrder("Maintenance", "Cleaning");
+        verify(events).publishEvent(new StaffMemberRemovedEvent(2L, 1L, "removed from the category", Set.of(1L)));
+    }
+
+    @Test
+    @DisplayName("Only adding categories releases nothing")
+    void addingCategoriesReleasesNothing() {
+        Employee johan = employee(2, Employee.Role.STAFF, true);
+        when(employees.findById(2L)).thenReturn(Optional.of(johan));
+        when(scope.findByEmployee(2L)).thenReturn(List.of(new HandlerCategory(johan, category(5, "Maintenance", true))));
+        when(categories.findAllById(Set.of(5L, 9L)))
+                .thenReturn(List.of(category(5, "Maintenance", true), category(9, "Cleaning", true)));
+
+        service.replaceCategories(2L, new HandlerCategoriesUpdate(List.of(5L, 9L)));
+
+        verifyNoInteractions(events);
     }
 
     @Test
@@ -171,5 +190,41 @@ class EmployeeServiceTest {
 
     private static EmployeePatch patchActive(boolean active) {
         return new EmployeePatch(null, null, null, null, null, null, active, null, null, null, null, null);
+    }
+
+    @Test
+    @DisplayName("Every editable field is applied; a new email must be free")
+    void updateAppliesFields() {
+        Employee e = employee(3, Employee.Role.STAFF, true);
+        when(employees.findById(3L)).thenReturn(Optional.of(e));
+        when(employees.existsByEmailIgnoreCase("taken@civicconnect.example")).thenReturn(true);
+
+        service.update(3L, new EmployeePatch(" Ayesha ", " Patel ", "New@CivicConnect.example", "Secret123!", "011",
+                null, null, LocalDate.of(1990, 1, 1), "1 Main", "Area", "City", "0001"));
+
+        assertThat(e.getEmail()).isEqualTo("new@civicconnect.example");
+        assertThat(e.getFirstName()).isEqualTo("Ayesha");
+        assertThat(e.getPassword()).startsWith("$2");
+        assertThat(e.getPostalCode()).isEqualTo("0001");
+        assertApiError(ErrorCode.CONFLICT, () -> service.update(3L,
+                new EmployeePatch(null, null, "taken@civicconnect.example", null, null, null, null, null, null, null, null, null)));
+    }
+
+    @Test
+    @DisplayName("List, get, categories and handlers-for-category; unknown IDs are not found")
+    void readOperations() {
+        Employee e = employee(3, Employee.Role.STAFF, true);
+        when(employees.findById(3L)).thenReturn(Optional.of(e));
+        when(employees.findAll(any(Pageable.class))).thenReturn(new PageImpl<>(List.of(e)));
+        when(scope.findByEmployee(3L)).thenReturn(List.of(new HandlerCategory(e, category(4, "IT Support", true))));
+        when(categories.existsById(4L)).thenReturn(true);
+        when(employees.findActiveHandlersFor(4L)).thenReturn(List.of());
+
+        assertThat(service.list(PageRequest.of(0, 20)).getContent()).hasSize(1);
+        assertThat(service.get(3L).id()).isEqualTo(3L);
+        assertThat(service.categories(3L)).extracting(CategoryResponse::catName).containsExactly("IT Support");
+        assertThat(service.handlersFor(4L)).isEmpty();
+        assertApiError(ErrorCode.NOT_FOUND, () -> service.get(99L));
+        assertApiError(ErrorCode.NOT_FOUND, () -> service.handlersFor(99L));
     }
 }

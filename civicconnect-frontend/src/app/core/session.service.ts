@@ -7,15 +7,15 @@ const USER_KEY = 'cc.user';
 
 export const HOME_ROUTE: Record<Role, string> = {
   REQUESTER: '/requests/new',
-  HANDLER: '/staff/requests',
-  MANAGER: '/management/activity',
+  STAFF: '/staff/requests',
+  MANAGEMENT: '/management/activity',
 };
 
-// Used by the unit tests and by screens that still run on the in-memory RequestApiService.
-const DEV_USERS: Record<Role, CurrentUser> = {
+// Test users for the unit tests (signInAs), so a test can show a screen without logging in.
+const TEST_USERS: Record<Role, CurrentUser> = {
   REQUESTER: { role: 'REQUESTER', badge: 'Requester #10234', requesterNumber: 10234 },
-  HANDLER: { role: 'HANDLER', badge: 'Handler - T. Mokoena', employeeId: 1 },
-  MANAGER: { role: 'MANAGER', badge: 'Manager - A. Naidoo', employeeId: 3 },
+  STAFF: { role: 'STAFF', badge: 'Staff - T. Mokoena', employeeId: 1 },
+  MANAGEMENT: { role: 'MANAGEMENT', badge: 'Manager - A. Naidoo', employeeId: 3 },
 };
 
 @Injectable({ providedIn: 'root' })
@@ -47,7 +47,7 @@ export class SessionService {
 
   signInAs(role: Role): void {
     this.tokenValue.set(null);
-    this.user.set(DEV_USERS[role]);
+    this.user.set(TEST_USERS[role]);
   }
 
   signOut(): void {
@@ -70,8 +70,14 @@ export class SessionService {
         this.signOut();
         return;
       }
+      const parsed = JSON.parse(user) as CurrentUser;
+      // A session saved under the old role names (HANDLER/MANAGER) is dropped: log in again
+      if (!(parsed.role in HOME_ROUTE)) {
+        this.signOut();
+        return;
+      }
       this.tokenValue.set(token);
-      this.user.set(JSON.parse(user) as CurrentUser);
+      this.user.set(parsed);
     } catch {
       this.signOut();
     }

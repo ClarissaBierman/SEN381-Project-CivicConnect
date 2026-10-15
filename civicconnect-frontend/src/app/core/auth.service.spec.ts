@@ -33,7 +33,7 @@ describe('AuthService', () => {
 
   afterEach(() => http.verify());
 
-  it('maps the API role STAFF to the HANDLER screens and sends the token on /auth/me', () => {
+  it('keeps the API role STAFF and sends the token on /auth/me', () => {
     let user: CurrentUser | undefined;
     auth.login({ email: 'thabo@civic.test', password: 'Secret123' }).subscribe((u) => (user = u));
 
@@ -48,11 +48,11 @@ describe('AuthService', () => {
       email: 'thabo@civic.test',
     });
 
-    expect(user).toEqual({ role: 'HANDLER', badge: 'Handler - T. Mokoena', employeeId: 7 });
-    expect(session.user()?.role).toBe('HANDLER');
+    expect(user).toEqual({ role: 'STAFF', badge: 'Staff - T. Mokoena', employeeId: 7 });
+    expect(session.user()?.role).toBe('STAFF');
   });
 
-  it('maps MANAGEMENT to MANAGER and REQUESTER to a requester number', () => {
+  it('keeps MANAGEMENT and gives REQUESTER a requester number', () => {
     auth.login({ email: 'a@civic.test', password: 'Secret123' }).subscribe();
     http.expectOne('/api/v1/auth/login').flush({ ...loginOk, role: 'MANAGEMENT' });
     http
@@ -65,7 +65,7 @@ describe('AuthService', () => {
         email: 'a@civic.test',
       });
     expect(session.user()).toEqual({
-      role: 'MANAGER',
+      role: 'MANAGEMENT',
       badge: 'Manager - A. Naidoo',
       employeeId: 3,
     });

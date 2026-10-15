@@ -2,21 +2,20 @@ package com.civicconnect.requests.repository;
 
 import com.civicconnect.requests.domain.ServiceRequest;
 import jakarta.persistence.LockModeType;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface RequestRepository extends JpaRepository<ServiceRequest, Long>, JpaSpecificationExecutor<ServiceRequest> {
 
-    /** A requester's own requests (FR-003). */
-    @Query("select r from ServiceRequest r where r.requester.clientId = :clientId")
-    Page<ServiceRequest> findByRequester(@Param("clientId") Long clientId, Pageable pageable);
+    /** Status changes of one request, oldest first: [status, changed_at] rows (V5 function). */
+    @Query(value = "select h.status, h.changed_at from request_status_history(:reqId) h", nativeQuery = true)
+    List<Object[]> statusHistory(@Param("reqId") Long reqId);
 
     /**
      * Loads a request and locks its row until the transaction ends (SELECT ... FOR UPDATE).

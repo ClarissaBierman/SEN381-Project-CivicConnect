@@ -33,13 +33,30 @@
 
 @if (report(); as r) {
   <div class="tiles">
+    <div class="tile"><span class="big">{{ r.total }}</span>Total</div>
     <div class="tile"><span class="big">{{ r.open }}</span>Open</div>
     <!-- Marker 3: FR-012 (CR-004) overdue = not Resolved, Closed or Rejected within 7 calendar days -->
     <div class="tile strong"><span class="big">{{ r.overdue }}</span>Overdue<small class="hint">Not resolved within 7 days</small></div>
     <div class="tile"><span class="big">{{ r.resolved }}</span>Resolved</div>
     <div class="tile"><span class="big">{{ r.closed }}</span>Closed</div>
+    <div class="tile"><span class="big">{{ r.rejected }}</span>Rejected</div>
   </div>
 }
+
+<!-- Open requests the counts above can miss: no handler yet, or created before the date range -->
+<div class="inline-row" role="group" aria-label="Open requests outside the counts">
+  <button type="button" class="btn" [class.primary]="listMode() === 'unassigned'" [attr.aria-pressed]="listMode() === 'unassigned'"
+          (click)="showList('unassigned')">
+    Unassigned open requests: {{ unassignedCount() ?? '...' }}
+  </button>
+  @if (olderBefore(); as before) {
+    <button type="button" class="btn" [class.primary]="listMode() === 'older'" [attr.aria-pressed]="listMode() === 'older'"
+            (click)="showList('older')">
+      Open requests created before {{ before | date: 'dd/MM/yyyy' }}: {{ olderCount() ?? '...' }}
+    </button>
+  }
+  <small class="hint">Click to list them under Request priority (any date, same category filter)</small>
+</div>
 
 <div class="two-col wide-left">
   <!-- Marker 4: ASR-005 / R-03 - aggregate counts only -->
@@ -47,16 +64,18 @@
     <h2>By category</h2>
     <table>
       <thead>
-        <tr><th>Category</th><th>Open</th><th>Overdue</th><th>Resolved</th><th>Closed</th></tr>
+        <tr><th>Category</th><th>Total</th><th>Open</th><th>Overdue</th><th>Resolved</th><th>Closed</th><th>Rejected</th></tr>
       </thead>
       <tbody>
         @for (row of report()?.byCategory ?? []; track row.categoryId) {
           <tr>
             <td>{{ row.categoryName }}</td>
+            <td>{{ row.total }}</td>
             <td>{{ row.open }}</td>
             <td>{{ row.overdue }}</td>
             <td>{{ row.resolved }}</td>
             <td>{{ row.closed }}</td>
+            <td>{{ row.rejected }}</td>
           </tr>
         }
       </tbody>
@@ -67,6 +86,17 @@
   <!-- Marker 5: FR-016 (CR-003) priority + API-08 assign any handler -->
   <section class="panel">
     <h2>Request priority</h2>
+    <p class="hint">
+      @switch (listMode()) {
+        @case ('unassigned') { Showing unassigned open requests ({{ openTotal() }}). }
+        @case ('older') { Showing open requests created before the date range ({{ openTotal() }}). }
+        @default { Showing open requests in the date range ({{ openTotal() }}). }
+      }
+      @if (openTotal() > openRequests().length) { Only the newest {{ openRequests().length }} are listed. }
+      @if (listMode() !== 'range') {
+        <button type="button" class="link-btn" (click)="showList(listMode())">Back to the date range</button>
+      }
+    </p>
     <div class="field">
       <label for="req">Request</label>
       <select id="req" [ngModel]="selectedId" (ngModelChange)="selectRequest($event)">
@@ -89,16 +119,19 @@
       </div>
       <div class="inline-row">
         <button type="button" class="btn" (click)="savePriority()">Save priority</button>
-        @if (d.handlerId === null) {
+      </div>
+      <div class="inline-row">
+        <span class="hint">Handler: {{ d.handlerName ?? 'Unassigned' }}</span>
+        @if (canAssign(d)) {
           <select aria-label="Handler" [(ngModel)]="assignTo">
-            <option [ngValue]="null" disabled>Assign to handler</option>
+            <option [ngValue]="null" disabled>{{ d.handlerId === null ? 'Assign to handler' : 'Reassign to handler' }}</option>
             @for (h of handlers(); track h.id) {
               <option [ngValue]="h.id">{{ h.name }}</option>
             }
           </select>
-          <button type="button" class="btn" [disabled]="assignTo === null" (click)="assign()">Assign</button>
-        } @else {
-          <span class="hint">Handler: {{ d.handlerName }}</span>
+          <button type="button" class="btn" [disabled]="assignTo === null" (click)="assign()">
+            {{ d.handlerId === null ? 'Assign' : 'Reassign' }}
+          </button>
         }
       </div>
       <small class="hint">Change is recorded in the audit history</small>

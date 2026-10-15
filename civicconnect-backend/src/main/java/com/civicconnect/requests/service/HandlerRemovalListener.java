@@ -19,8 +19,9 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDateTime;
 
 /**
- * When an employee stops being a handler (deactivated, or moved to Management), take them off every
- * open request so nothing is left with a handler who can no longer act on it:
+ * When an employee stops being a handler (deactivated, moved to Management, or removed from a category),
+ * take them off the affected open requests (New, Assigned, In Progress) so nothing is left with a handler
+ * who can no longer act on it. Resolved, Closed and Rejected requests are not touched (FR-011):
  *  - their assignment row is closed (unassigned_at = now);
  *  - an Assigned request goes back to New, so it reappears in the queue for other handlers to accept;
  *  - an In Progress request keeps its status and waits for a manager to reassign it;
@@ -51,8 +52,11 @@ public class HandlerRemovalListener {
         LocalDateTime now = Time.now();
         Employee manager = entityManager.getReference(Employee.class, event.actorId());
         int released = 0;
-        for (RequestHandler assignment : handlers.findActiveForEmployee(event.empId())) {
+        for (RequestHandler assignment : handlers.findActiveForEmployee(event.empId(), ServiceRequest.OPEN_STATUSES)) {
             ServiceRequest request = assignment.getRequest();
+            if (!event.covers(request.getCategory().getCatId())) {
+                continue;
+            }
             assignment.setUnassignedAt(now);
 
             String next;

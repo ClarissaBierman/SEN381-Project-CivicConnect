@@ -1,6 +1,7 @@
 package com.civicconnect.requests.repository;
 
 import com.civicconnect.requests.domain.RequestHandler;
+import com.civicconnect.requests.domain.ServiceRequest;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -20,7 +21,13 @@ public interface RequestHandlerRepository extends JpaRepository<RequestHandler, 
             + "where rh.request.reqId in :reqIds and rh.unassignedAt is null")
     List<Object[]> findActiveHandlerIds(@Param("reqIds") Collection<Long> reqIds);
 
-    /** Every open assignment of one employee (used when they stop being a handler). */
-    @Query("select rh from RequestHandler rh join fetch rh.request where rh.employee.empId = :empId and rh.unassignedAt is null")
-    List<RequestHandler> findActiveForEmployee(@Param("empId") Long empId);
+    /**
+     * The employee's current assignments on requests that are still being worked on (New, Assigned,
+     * In Progress), used when they stop being a handler. Resolved, Closed and Rejected requests keep
+     * their handler on record and are never changed (FR-011).
+     */
+    @Query("select rh from RequestHandler rh join fetch rh.request r where rh.employee.empId = :empId "
+            + "and rh.unassignedAt is null and r.status in :statuses")
+    List<RequestHandler> findActiveForEmployee(@Param("empId") Long empId,
+                                               @Param("statuses") Collection<ServiceRequest.Status> statuses);
 }

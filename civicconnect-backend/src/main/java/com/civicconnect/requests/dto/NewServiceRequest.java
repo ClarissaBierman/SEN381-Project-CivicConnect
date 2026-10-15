@@ -7,7 +7,7 @@ import jakarta.validation.constraints.Size;
 
 public record NewServiceRequest(
         @NotNull Long categoryId,
-        @NotBlank @Size(max = 5000) String description,
+        @NotBlank @Size(max = 2000) String description,
         @NotBlank @Size(max = 255) String location,
         @Size(max = 500) @Pattern(regexp = "^https?://.+$", message = "must be an http or https link") String attachmentUrl
 ) {}

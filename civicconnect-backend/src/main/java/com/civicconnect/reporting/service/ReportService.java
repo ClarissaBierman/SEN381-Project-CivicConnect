@@ -2,7 +2,6 @@ package com.civicconnect.reporting.service;
 
 import com.civicconnect.common.error.Errors;
 import com.civicconnect.common.security.CurrentUserService;
-import com.civicconnect.common.security.DbSession;
 import com.civicconnect.common.time.Time;
 import com.civicconnect.reporting.dto.ActivityReport;
 import com.civicconnect.reporting.repository.ReportRepository;
@@ -25,12 +24,10 @@ public class ReportService {
 
     private final ReportRepository reports;
     private final CurrentUserService currentUser;
-    private final DbSession db;
 
-    public ReportService(ReportRepository reports, CurrentUserService currentUser, DbSession db) {
+    public ReportService(ReportRepository reports, CurrentUserService currentUser) {
         this.reports = reports;
         this.currentUser = currentUser;
-        this.db = db;
     }
 
     /**
@@ -39,7 +36,6 @@ public class ReportService {
      */
     @Transactional(readOnly = true)
     public ActivityReport activity(LocalDate from, LocalDate to, Long categoryId, ServiceRequest.Status status) {
-        db.begin(currentUser.get());
         if (from != null && to != null && from.isAfter(to)) {
             throw Errors.invalidField("from", "\"From\" must be on or before \"To\"");
         }

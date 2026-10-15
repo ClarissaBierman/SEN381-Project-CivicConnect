@@ -24,14 +24,14 @@ describe('App shell', () => {
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
     const links = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('nav a')).map((a) => a.textContent?.trim());
-    expect(links).toEqual(['My Requests', 'New Request']);
+    expect(links).toEqual(['My Requests', 'New Request', 'Profile']);
   });
 
   it('shows the management menu to a manager', async () => {
-    TestBed.inject(SessionService).signInAs('MANAGER');
+    TestBed.inject(SessionService).signInAs('MANAGEMENT');
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
     const links = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('nav a')).map((a) => a.textContent?.trim());
-    expect(links).toEqual(['Activity', 'Requests', 'Categories', 'Handler categories']);
+    expect(links).toEqual(['Activity', 'Requests', 'Categories', 'Staff', 'Audit']);
   });
 });

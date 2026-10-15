@@ -4,7 +4,7 @@
 --
 --  1. Schema exactly as Flyway V1 + V2 would build it (tables, rules, indexes,
 --     audit trigger, append-only comment and audit tables)
---  2. Dummy data with a matching audit history
+--  2. Dummy data with a matching audit history, plus the default manager (admin@gmail.com)
 --  3. Database roles for each type of user, with their permissions
 --
 -- WARNING: this DROPS the civicconnect schema and everything in it, then rebuilds it.
@@ -428,6 +428,18 @@ SELECT setval(pg_get_serial_sequence('request_handler', 'req_handler_id'), (SELE
 SELECT setval(pg_get_serial_sequence('comment', 'com_id'),                 (SELECT max(com_id) FROM comment));
 SELECT setval(pg_get_serial_sequence('handler_category', 'handler_category_id'), (SELECT max(handler_category_id) FROM handler_category));
 SELECT setval('request_ref_seq', (SELECT max(req_id) FROM request) + 1, false);
+
+-- =====================================================================
+-- 3b. Default manager account (DEC-008)
+-- Always created, so a database without the dummy data still has a manager who can log in and
+-- create the other accounts. Email admin@gmail.com, password  Password.123  (BCrypt hash below).
+-- Change this password after the first login on any shared or production database.
+-- The audit trigger is on, so this is recorded as a system change (no actor).
+-- =====================================================================
+INSERT INTO employee (first_name, surname, email, password, role, active, created_at)
+VALUES ('System', 'Administrator', 'admin@gmail.com',
+        '$2a$10$hqmOeFjEBUhyUPpcqexj7emtajHNx0qTETDazu5.0e8SEOGtgNMn6', 'MANAGEMENT', TRUE,
+        now() AT TIME ZONE 'UTC');
 
 -- =====================================================================
 -- 4. Database roles and permissions

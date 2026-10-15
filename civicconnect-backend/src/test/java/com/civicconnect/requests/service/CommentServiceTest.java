@@ -6,7 +6,6 @@ import com.civicconnect.access.repository.HandlerCategoryRepository;
 import com.civicconnect.access.service.StaffDirectory;
 import com.civicconnect.common.error.ErrorCode;
 import com.civicconnect.common.security.CurrentUserService;
-import com.civicconnect.common.security.DbSession;
 import com.civicconnect.requests.domain.Comment;
 import com.civicconnect.requests.domain.ServiceRequest;
 import com.civicconnect.requests.dto.CommentResponse;
@@ -49,7 +48,7 @@ class CommentServiceTest {
 
         StaffDirectory staff = new StaffDirectory(mock(EmployeeRepository.class), scope);
         service = new CommentService(commentRepository, new RequestAccess(requestRepository, staff),
-                new TransitionPolicy(), new CommentViews(commentRepository, staff), currentUser, mock(DbSession.class));
+                new TransitionPolicy(), new CommentViews(commentRepository, staff), currentUser);
 
         EntityManager em = mock(EntityManager.class);
         when(em.getReference(eq(Employee.class), any()))
@@ -61,6 +60,7 @@ class CommentServiceTest {
     private ServiceRequest existing(Status status) {
         ServiceRequest r = request(10, status, category(4, "IT Support", true), 1);
         when(requestRepository.findById(10L)).thenReturn(Optional.of(r));
+        when(requestRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(r));
         return r;
     }
 

@@ -1,5 +1,6 @@
 package com.civicconnect.access.dto;
 
+import com.civicconnect.common.validation.MaxBytes;
 import com.civicconnect.access.domain.Employee;
 
 import jakarta.validation.constraints.Email;
@@ -14,7 +15,7 @@ public record NewEmployee(
         @NotBlank @Size(max = 100) String firstName,
         @NotBlank @Size(max = 100) String surname,
         @NotBlank @Email @Size(max = 255) String email,
-        @NotBlank @Size(min = 8, max = 72) String password,
+        @NotBlank @Size(min = 8, max = 72) @MaxBytes(72) String password,
         @Size(max = 30) String phone,
         @NotNull Employee.Role role,
         @Past LocalDate dateOfBirth,

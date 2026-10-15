@@ -1,5 +1,7 @@
 package com.civicconnect.access.service;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import com.civicconnect.access.domain.Client;
 import com.civicconnect.access.dto.ClientContactResponse;
 import com.civicconnect.access.dto.ClientPatch;
@@ -9,7 +11,6 @@ import com.civicconnect.common.error.ApiException;
 import com.civicconnect.common.error.ErrorCode;
 import com.civicconnect.common.ratelimit.LoginAttemptLimiter;
 import com.civicconnect.common.security.CurrentUserService;
-import com.civicconnect.common.security.DbSession;
 import com.civicconnect.support.MutableClock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -38,8 +39,7 @@ class ClientServiceTest {
         clients = mock(ClientRepository.class);
         currentUser = mock(CurrentUserService.class);
         limiter = new LoginAttemptLimiter(5, Duration.ofMinutes(15), new MutableClock());
-        service = new ClientService(clients, mock(EmployeeRepository.class), encoder, currentUser,
-                mock(DbSession.class), limiter);
+        service = new ClientService(clients, mock(EmployeeRepository.class), encoder, currentUser, limiter);
 
         thabo = client(1);
         thabo.setPassword(encoder.encode("Password123!"));
@@ -104,5 +104,18 @@ class ClientServiceTest {
         assertThat(ClientContactResponse.class.getRecordComponents())
                 .extracting(c -> c.getName()).doesNotContain("dateOfBirth", "password");
         assertApiError(ErrorCode.NOT_FOUND, () -> service.contact(99L));
+    }
+
+    @Test
+    @DisplayName("Own profile, taken email, and activating or deactivating a client")
+    void profileAndActivation() {
+        when(clients.existsByEmailIgnoreCase("taken@example.com")).thenReturn(true);
+        when(clients.updateActive(eq(1L), eq(false), any())).thenReturn(1);
+
+        assertThat(service.me().id()).isEqualTo(1L);
+        assertApiError(ErrorCode.CONFLICT, () -> service.updateMe(patch("taken@example.com", null, "Password123!")));
+        when(currentUser.get()).thenReturn(manager(1));
+        service.setActive(1L, false);
+        assertApiError(ErrorCode.NOT_FOUND, () -> service.setActive(99L, true));
     }
 }

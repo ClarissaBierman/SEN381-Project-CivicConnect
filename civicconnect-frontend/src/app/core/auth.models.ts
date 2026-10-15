@@ -1,4 +1,6 @@
-export type BackendRole = 'REQUESTER' | 'STAFF' | 'MANAGEMENT';
+import { Role } from './models';
+
+export type BackendRole = Role;
 
 export interface LoginBody {
   email: string;

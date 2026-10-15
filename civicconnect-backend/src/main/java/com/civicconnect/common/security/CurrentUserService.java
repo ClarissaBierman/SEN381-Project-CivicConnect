@@ -7,16 +7,24 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
 
+import java.util.Optional;
+
 @Component
 public class CurrentUserService {
 
+    /** The logged-in user, or 401 UNAUTHENTICATED if nobody is logged in. */
     public CurrentUser get() {
+        return find().orElseThrow(() -> Errors.unauthenticated("Please log in."));
+    }
+
+    /** The logged-in user, if there is one. */
+    public Optional<CurrentUser> find() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !(auth.getPrincipal() instanceof Jwt jwt)) {
-            throw Errors.unauthenticated("Please log in.");
+            return Optional.empty();
         }
-        return new CurrentUser(
+        return Optional.of(new CurrentUser(
                 Long.valueOf(jwt.getSubject()),
-                CurrentUser.Role.valueOf(jwt.getClaimAsString(JwtService.ROLE_CLAIM)));
+                CurrentUser.Role.valueOf(jwt.getClaimAsString(JwtService.ROLE_CLAIM))));
     }
 }

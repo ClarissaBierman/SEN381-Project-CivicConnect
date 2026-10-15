@@ -2,27 +2,19 @@ import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { map, switchMap, tap } from 'rxjs/operators';
-import { AuthResponse, BackendRole, LoginBody, MeResponse, RegisterBody } from './auth.models';
-import { CurrentUser, Role } from './models';
+import { AuthResponse, LoginBody, MeResponse, RegisterBody } from './auth.models';
+import { CurrentUser } from './models';
 import { SessionService } from './session.service';
 
-// The API calls staff STAFF and MANAGEMENT, the screens use HANDLER and MANAGER.
-// Translating here means no screen or route guard has to change.
-export const ROLE_FROM_API: Record<BackendRole, Role> = {
-  REQUESTER: 'REQUESTER',
-  STAFF: 'HANDLER',
-  MANAGEMENT: 'MANAGER',
-};
-
 export function toCurrentUser(me: MeResponse): CurrentUser {
-  const role = ROLE_FROM_API[me.role];
+  const role = me.role;
   const shortName = `${me.firstName.charAt(0)}. ${me.surname}`;
   if (role === 'REQUESTER') {
     return { role, badge: `Requester #${me.id}`, requesterNumber: me.id };
   }
   return {
     role,
-    badge: `${role === 'MANAGER' ? 'Manager' : 'Handler'} - ${shortName}`,
+    badge: `${role === 'MANAGEMENT' ? 'Manager' : 'Staff'} - ${shortName}`,
     employeeId: me.id,
   };
 }

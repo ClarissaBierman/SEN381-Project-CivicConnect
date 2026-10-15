@@ -25,13 +25,18 @@ describe('RequestApiService (HTTP mapping)', () => {
     createdAt: '2026-10-10T08:00:00Z', updatedAt: '2026-10-12T09:30:00Z', closedAt: null,
     description: 'Printer jammed', attachmentUrl: null, requesterId: 1,
     allowedTransitions: ['RESOLVED'],
+    statusHistory: [
+      { status: 'NEW', at: '2026-10-10T08:00:00Z' },
+      { status: 'ASSIGNED', at: '2026-10-10T09:00:00Z' },
+      { status: 'IN_PROGRESS', at: '2026-10-12T09:30:00Z' },
+    ],
     comments: [
       { id: 1, authorName: 'Ayesha Patel', content: 'Part ordered', visibleToRequester: true, createdAt: '2026-10-11T10:00:00Z' },
       { id: 2, authorName: 'Ayesha Patel', content: 'Supplier slow', visibleToRequester: false, createdAt: '2026-10-12T09:30:00Z' },
     ],
   };
 
-  it('API-06: maps the detail, and builds the requester updates from dates and visible notes only', async () => {
+  it('API-06: maps the detail, and builds the requester updates from the status history and visible notes only', async () => {
     const result = firstValueFrom(api.getRequest(31));
     http.expectOne('/api/v1/requests/31').flush(serverDetail);
     const d = await result;
@@ -39,7 +44,7 @@ describe('RequestApiService (HTTP mapping)', () => {
     expect(d.requesterNumber).toBe(1);
     expect(d.handlerName).toBe('Ayesha Patel');
     expect(d.comments.map((c) => c.author)).toEqual(['Ayesha Patel', 'Ayesha Patel']);
-    expect(d.updates.map((u) => u.text)).toEqual(['Status: In Progress', 'Note: Part ordered', 'Request submitted']);
+    expect(d.updates.map((u) => u.text)).toEqual(['Status: In Progress', 'Note: Part ordered', 'Status: Assigned', 'Request submitted']);
   });
 
   it('API-07: sends filters and sort, and flattens Spring\'s page object', async () => {
@@ -55,6 +60,19 @@ describe('RequestApiService (HTTP mapping)', () => {
 
     const page = await result;
     expect(page).toEqual({ content: [], page: 1, size: 20, totalElements: 21, totalPages: 2 });
+  });
+
+  it('API-07: open and unassigned are only sent when set', async () => {
+    const result = firstValueFrom(
+      api.getRequests({ status: null, open: true, unassigned: true, categoryId: null, from: null, to: '2026-09-30', sort: 'priority,desc', page: 0, size: 1 }),
+    );
+    const req = http.expectOne((r) => r.url === '/api/v1/requests');
+    expect(req.request.params.get('open')).toBe('true');
+    expect(req.request.params.get('unassigned')).toBe('true');
+    expect(req.request.params.get('to')).toBe('2026-09-30');
+    expect(req.request.params.has('from')).toBe(false);
+    req.flush({ content: [], page: { size: 1, number: 0, totalElements: 4, totalPages: 4 } });
+    expect((await result).totalElements).toBe(4);
   });
 
   it('API-08: a handler accepts with no body; a manager sends the employeeId', async () => {

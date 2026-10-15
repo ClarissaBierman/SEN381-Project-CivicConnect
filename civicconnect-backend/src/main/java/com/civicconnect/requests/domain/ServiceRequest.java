@@ -5,12 +5,17 @@ import com.civicconnect.access.domain.Client;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import java.util.EnumSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "request")
 public class ServiceRequest {
 
     public enum Status { NEW, ASSIGNED, IN_PROGRESS, RESOLVED, CLOSED, REJECTED }
+
+    /** Requests still being worked on (FR-012, API-17 "open"). */
+    public static final Set<Status> OPEN_STATUSES = Set.copyOf(EnumSet.of(Status.NEW, Status.ASSIGNED, Status.IN_PROGRESS));
 
     /** FR-016 (CR-003). Set by Management only; null until a manager sets it. */
     public enum Priority { LOW, MEDIUM, HIGH }

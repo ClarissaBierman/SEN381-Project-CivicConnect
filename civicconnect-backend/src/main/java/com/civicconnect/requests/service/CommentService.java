@@ -5,7 +5,6 @@ import com.civicconnect.common.error.ErrorCode;
 import com.civicconnect.common.error.Errors;
 import com.civicconnect.common.security.CurrentUser;
 import com.civicconnect.common.security.CurrentUserService;
-import com.civicconnect.common.security.DbSession;
 import com.civicconnect.requests.domain.Comment;
 import com.civicconnect.requests.domain.ServiceRequest;
 import com.civicconnect.requests.dto.CommentResponse;
@@ -29,24 +28,21 @@ public class CommentService {
     private final TransitionPolicy transitionPolicy;
     private final CommentViews views;
     private final CurrentUserService currentUser;
-    private final DbSession db;
 
     public CommentService(CommentRepository commentRepository, RequestAccess access, TransitionPolicy transitionPolicy,
-                          CommentViews views, CurrentUserService currentUser, DbSession db) {
+                          CommentViews views, CurrentUserService currentUser) {
         this.commentRepository = commentRepository;
         this.access = access;
         this.transitionPolicy = transitionPolicy;
         this.views = views;
         this.currentUser = currentUser;
-        this.db = db;
     }
 
     @Transactional
     public CommentResponse add(Long requestId, NewComment body) {
         CurrentUser user = currentUser.get();
-        db.begin(user);
 
-        ServiceRequest request = access.load(requestId);
+        ServiceRequest request = access.loadForUpdate(requestId); // same row lock as status changes
         access.checkStaffScope(request, user);
         if (transitionPolicy.isTerminal(request.getStatus())) {
             throw Errors.rule(ErrorCode.REQUEST_CLOSED, "Closed or rejected requests are read-only.");
@@ -61,7 +57,6 @@ public class CommentService {
     @Transactional(readOnly = true)
     public List<CommentResponse> list(Long requestId) {
         CurrentUser user = currentUser.get();
-        db.begin(user);
         access.loadViewable(requestId, user);
         return views.forRequest(requestId, user);
     }
