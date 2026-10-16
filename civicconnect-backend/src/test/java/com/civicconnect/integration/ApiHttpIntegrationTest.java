@@ -30,7 +30,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * API tests over HTTP through the whole stack: security filter chain (JWT, account check, rate limit),
- * @PreAuthorize role rules, controllers, services, database roles, audit trigger and migrations V3/V4.
+ * @PreAuthorize role rules, controllers, services, database roles, audit trigger and migrations V3 to V7.
  * Uses the dummy data from database/civicconnect_supabase_build.sql:
  *   clients 1 Thabo, 2 Naledi, 6 Fatima (deactivated); employees 1 Lerato (manager),
  *   2 Johan (staff: Facility Faults 1, Maintenance 5, Other 7), 3 Ayesha (staff: 2, 4), 5 Megan (deactivated),

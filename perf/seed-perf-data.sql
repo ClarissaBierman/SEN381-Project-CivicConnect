@@ -2,7 +2,7 @@
 -- CivicConnect - load-test data (M3 performance exercise, perf/README.md)
 -- Run as the database owner on a TEST or STAGING database that was built with
 -- database/civicconnect_supabase_build.sql. NEVER run it on the live database.
--- Start the backend against that database once first: Flyway must have applied V3 to V5
+-- Start the backend against that database once first: Flyway must have applied V3 and later
 -- (this script uses the V4 priority column).
 --
 -- Adds:
