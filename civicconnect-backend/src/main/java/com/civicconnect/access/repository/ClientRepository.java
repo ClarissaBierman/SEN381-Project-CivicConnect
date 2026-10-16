@@ -16,6 +16,14 @@ public interface ClientRepository extends JpaRepository<Client, Long> {
     boolean existsByEmailIgnoreCase(String email);
 
     /**
+     * Whether any account (client or employee) already uses this email address. Runs the V6 database
+     * function, which may read both tables whatever the caller's database role is allowed to read
+     * (a requester's role cannot read the employee table).
+     */
+    @Query(value = "select civicconnect.email_in_use(:email)", nativeQuery = true)
+    boolean emailInUse(@Param("email") String email);
+
+    /**
      * Activates or deactivates a client without loading the row, so Management never reads
      * client personal data or password hashes (ASR-005). Returns the number of rows changed.
      */

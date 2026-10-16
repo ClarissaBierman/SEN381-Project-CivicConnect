@@ -64,8 +64,9 @@ different machine and operating system, confirms the result is repeatable.
 | Software | PostgreSQL 18, k6 v2.2.0, backend via `mvnw spring-boot:run` | PostgreSQL 17.9, k6 v1.3.0, OpenJDK 21.0.12 |
 | Data | build script dummy data + `seed-perf-data.sql` (about 10,000 requests) | same (10,021 requests, 7,014 assignments, 17,307 audit rows) |
 
-In both runs the backend, the database and k6 ran on the same machine, with the configured database
-pool of 5 connections.
+In both runs the backend, the database and k6 ran on the same machine. Database connection pool: 10 in
+Run A (the committed setting, `spring.datasource.hikari.maximum-pool-size=10`) and 5 in Run B (a copy
+taken before the setting went back to 10).
 
 **Pilot workload (pass/fail test)**
 
@@ -103,8 +104,8 @@ Files: `results/request-list-stress-2026-10-15T11-39-35-250Z.json` (A),
   database and the `(cat_id, status, created_at)` index (ASR-004) keep each call small even with
   10,000 requests.
 - **Headroom**: at about 50 times the pilot request rate, p95 is still about 0.3 s with no errors.
-  Response times grow under that load because requests wait for one of the 5 database connections
-  (M2 assumed the HikariCP default of 10) and, on the smaller machine, for CPU. Nothing failed, so the
+  Response times grow under that load because requests wait for a free database connection (10 in
+  Run A, 5 in Run B) and, on the smaller machine, for CPU. Nothing failed, so the
   first limit is queueing, not errors.
 - **Rate limiting** did not interfere with the pilot workload: each user stays far below the
   per-account limit (120 calls/minute).

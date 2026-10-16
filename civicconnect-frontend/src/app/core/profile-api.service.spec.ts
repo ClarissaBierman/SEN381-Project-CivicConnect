@@ -33,4 +33,13 @@ describe('ProfileApiService', () => {
     );
     await expect(result).rejects.toMatchObject({ code: 'VALIDATION_FAILED', fieldErrors: [{ field: 'currentPassword' }] });
   });
+
+  it('changes an employee password with the current one (API-26)', async () => {
+    const result = firstValueFrom(api.changeEmployeePassword('Old12345!', 'New12345!'));
+    const req = http.expectOne('/api/v1/employees/me/password');
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ currentPassword: 'Old12345!', password: 'New12345!' });
+    req.flush(null, { status: 204, statusText: 'No Content' });
+    await expect(result).resolves.toBeNull();
+  });
 });

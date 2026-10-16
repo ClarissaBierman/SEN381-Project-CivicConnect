@@ -88,7 +88,8 @@ export class LoginPage {
       return;
     }
     const params = inject(ActivatedRoute).snapshot.queryParamMap;
-    if (params.has('registered')) this.notice.set('Account created. You can log in now.');
+    if (params.has('registered'))
+      this.notice.set('If this email address was not registered yet, your account has been created. Log in to continue.');
     if (params.has('expired')) this.notice.set('Your session has expired. Please log in again.');
     if (params.has('deactivated')) this.notice.set('Your account is no longer active. Please contact CivicConnect.');
   }

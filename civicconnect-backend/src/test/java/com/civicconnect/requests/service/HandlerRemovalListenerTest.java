@@ -10,6 +10,7 @@ import com.civicconnect.requests.domain.ServiceRequest.Status;
 import com.civicconnect.requests.repository.CommentRepository;
 import com.civicconnect.requests.repository.RequestHandlerRepository;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -32,8 +33,9 @@ class HandlerRemovalListenerTest {
     private final HandlerRemovalListener listener = new HandlerRemovalListener(handlers, comments);
     private final Category it = category(4, "IT Support", true);
 
+    private final EntityManager em = mock(EntityManager.class);
+
     HandlerRemovalListenerTest() {
-        EntityManager em = mock(EntityManager.class);
         when(em.getReference(eq(Employee.class), any()))
                 .thenAnswer(i -> employee((Long) i.getArgument(1), Employee.Role.MANAGEMENT, true));
         ReflectionTestUtils.setField(listener, "entityManager", em);
@@ -91,5 +93,37 @@ class HandlerRemovalListenerTest {
         assertThat(elsewhere.getStatus()).isEqualTo(Status.ASSIGNED);
         assertThat(b.getUnassignedAt()).isNull();
         verify(comments, times(1)).save(any());
+    }
+
+    @Test
+    @DisplayName("Each request is locked and re-read before it is changed (D-20)")
+    void locksBeforeChanging() {
+        ServiceRequest assigned = request(10, Status.ASSIGNED, it, 1);
+        RequestHandler a = new RequestHandler(assigned, employee(3, Employee.Role.STAFF, false));
+        when(handlers.findActiveForEmployee(3L, ServiceRequest.OPEN_STATUSES)).thenReturn(List.of(a));
+
+        listener.onStaffMemberRemoved(new StaffMemberRemovedEvent(3L, 1L, "deactivated"));
+
+        var order = inOrder(em, comments);
+        order.verify(em).refresh(assigned, LockModeType.PESSIMISTIC_WRITE);
+        order.verify(em).refresh(a);
+        order.verify(comments).save(any());
+    }
+
+    @Test
+    @DisplayName("A request resolved by someone else meanwhile is left alone, with its handler (FR-011)")
+    void changedMeanwhileIsSkipped() {
+        ServiceRequest request = request(10, Status.IN_PROGRESS, it, 1);
+        RequestHandler a = new RequestHandler(request, employee(3, Employee.Role.STAFF, false));
+        when(handlers.findActiveForEmployee(3L, ServiceRequest.OPEN_STATUSES)).thenReturn(List.of(a));
+        // The handler resolved it just before the lock was taken: the re-read shows the new status
+        doAnswer(i -> { request.setStatus(Status.RESOLVED); return null; })
+                .when(em).refresh(request, LockModeType.PESSIMISTIC_WRITE);
+
+        listener.onStaffMemberRemoved(new StaffMemberRemovedEvent(3L, 1L, "deactivated"));
+
+        assertThat(request.getStatus()).isEqualTo(Status.RESOLVED);
+        assertThat(a.getUnassignedAt()).isNull();
+        verifyNoInteractions(comments);
     }
 }

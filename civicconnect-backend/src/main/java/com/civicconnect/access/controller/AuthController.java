@@ -1,10 +1,10 @@
 package com.civicconnect.access.controller;
 
 import com.civicconnect.access.dto.AuthResponse;
-import com.civicconnect.access.dto.ClientResponse;
 import com.civicconnect.access.dto.LoginRequest;
 import com.civicconnect.access.dto.MeResponse;
 import com.civicconnect.access.dto.RegisterRequest;
+import com.civicconnect.access.dto.RegistrationResponse;
 import com.civicconnect.access.service.AuthService;
 
 import jakarta.validation.Valid;
@@ -21,9 +21,10 @@ public class AuthController {
         this.authService = authService;
     }
 
+    /** 202: the same answer whether or not the email address was already registered (D-25). */
     @PostMapping("/register")
-    @ResponseStatus(HttpStatus.CREATED)
-    public ClientResponse register(@Valid @RequestBody RegisterRequest body) {
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public RegistrationResponse register(@Valid @RequestBody RegisterRequest body) {
         return authService.register(body);
     }
 

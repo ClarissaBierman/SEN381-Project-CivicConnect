@@ -51,8 +51,12 @@ public class SecurityConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/register", "/api/v1/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/health").permitAll()
                         .requestMatchers("/error").permitAll()
-                        .anyRequest().authenticated())
+                        // All data is under /api and needs a valid token
+                        .requestMatchers("/api/**").authenticated()
+                        // Everything else is the Angular app's public files (ARC-03 single jar)
+                        .anyRequest().permitAll())
                 // 401 and 403 from the filters use the same error body as the controllers (error model)
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(problems).accessDeniedHandler(problems))
                 .oauth2ResourceServer(oauth -> oauth
@@ -61,9 +65,12 @@ public class SecurityConfig {
                         .accessDeniedHandler(problems))
                 // Errors thrown in the filters (e.g. the database is down during the account check) -> PED body
                 .addFilterBefore(new FilterErrorHandler(problemWriter), BearerTokenAuthenticationFilter.class)
-                // B4: per-IP and per-account rate limits, after the token is verified so the account is known
-                .addFilterAfter(new ApiRateLimitFilter(apiLimiter, ipLimiter, authIpLimiter, problemWriter),
-                        BearerTokenAuthenticationFilter.class);
+                // B4: per-IP limits before the token is checked (so bad tokens are counted too), and the
+                // per-account limit after it is verified, when the account is known
+                .addFilterBefore(new ApiRateLimitFilter(apiLimiter, ipLimiter, authIpLimiter, problemWriter,
+                        ApiRateLimitFilter.Stage.BEFORE_AUTHENTICATION), BearerTokenAuthenticationFilter.class)
+                .addFilterAfter(new ApiRateLimitFilter(apiLimiter, ipLimiter, authIpLimiter, problemWriter,
+                        ApiRateLimitFilter.Stage.AFTER_AUTHENTICATION), BearerTokenAuthenticationFilter.class);
         return http.build();
     }
 

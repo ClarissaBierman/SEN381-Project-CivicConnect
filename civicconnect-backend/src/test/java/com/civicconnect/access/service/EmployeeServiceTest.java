@@ -13,10 +13,12 @@ import com.civicconnect.access.domain.Employee;
 import com.civicconnect.access.domain.HandlerCategory;
 import com.civicconnect.access.dto.HandlerCategoriesUpdate;
 import com.civicconnect.access.dto.NewEmployee;
+import com.civicconnect.access.dto.PasswordChange;
 import com.civicconnect.access.repository.ClientRepository;
 import com.civicconnect.access.repository.EmployeeRepository;
 import com.civicconnect.access.repository.HandlerCategoryRepository;
 import com.civicconnect.common.error.ErrorCode;
+import com.civicconnect.common.error.Errors;
 import com.civicconnect.common.security.CurrentUserService;
 import com.civicconnect.requests.repository.CategoryRepository;
 
@@ -46,6 +48,7 @@ class EmployeeServiceTest {
     private CategoryRepository categories;
     private HandlerCategoryRepository scope;
     private EmployeeService service;
+    private EmployeeCredentials credentials;
 
     @BeforeEach
     void setUp() {
@@ -56,8 +59,9 @@ class EmployeeServiceTest {
         CurrentUserService currentUser = mock(CurrentUserService.class);
         when(currentUser.get()).thenReturn(manager(1));
         events = mock(ApplicationEventPublisher.class);
+        credentials = mock(EmployeeCredentials.class);
         service = new EmployeeService(employees, clients, categories, scope,
-                new BCryptPasswordEncoder(4), currentUser, new StaffDirectory(employees, scope), events);
+                new BCryptPasswordEncoder(4), currentUser, new StaffDirectory(employees, scope), events, credentials);
         when(employees.save(any())).thenAnswer(i -> i.getArgument(0));
     }
 
@@ -76,7 +80,7 @@ class EmployeeServiceTest {
     @Test
     @DisplayName("An email already used by a client cannot be reused for an employee")
     void createRejectsEmailUsedByClient() {
-        when(clients.existsByEmailIgnoreCase("shared@example.com")).thenReturn(true);
+        when(clients.emailInUse("shared@example.com")).thenReturn(true);
 
         assertApiError(ErrorCode.CONFLICT, () -> service.create(new NewEmployee("A", "B", "shared@example.com",
                 "Secret123!", null, Employee.Role.STAFF, null, null, null, null, null)));
@@ -197,7 +201,7 @@ class EmployeeServiceTest {
     void updateAppliesFields() {
         Employee e = employee(3, Employee.Role.STAFF, true);
         when(employees.findById(3L)).thenReturn(Optional.of(e));
-        when(employees.existsByEmailIgnoreCase("taken@civicconnect.example")).thenReturn(true);
+        when(clients.emailInUse("taken@civicconnect.example")).thenReturn(true);
 
         service.update(3L, new EmployeePatch(" Ayesha ", " Patel ", "New@CivicConnect.example", "Secret123!", "011",
                 null, null, LocalDate.of(1990, 1, 1), "1 Main", "Area", "City", "0001"));
@@ -226,5 +230,25 @@ class EmployeeServiceTest {
         assertThat(service.handlersFor(4L)).isEmpty();
         assertApiError(ErrorCode.NOT_FOUND, () -> service.get(99L));
         assertApiError(ErrorCode.NOT_FOUND, () -> service.handlersFor(99L));
+    }
+
+    @Test
+    @DisplayName("API-26: changing your own password checks the current one first, then stores the new one")
+    void changeOwnPasswordChecksThenStores() {
+        service.changeOwnPassword(new PasswordChange("Old12345!", "New12345!"));
+
+        var order = inOrder(credentials);
+        order.verify(credentials).checkCurrentPassword(1L, "Old12345!");
+        order.verify(credentials).storeNewPassword(1L, "New12345!");
+    }
+
+    @Test
+    @DisplayName("API-26: a wrong current password stores nothing")
+    void changeOwnPasswordWrongCurrent() {
+        doThrow(Errors.invalidField("currentPassword", "Current password is incorrect"))
+                .when(credentials).checkCurrentPassword(1L, "wrong");
+
+        assertApiError(ErrorCode.VALIDATION_FAILED, () -> service.changeOwnPassword(new PasswordChange("wrong", "New12345!")));
+        verify(credentials, never()).storeNewPassword(any(), any());
     }
 }

@@ -8,6 +8,7 @@ import com.civicconnect.access.dto.EmployeeResponse;
 import com.civicconnect.access.dto.HandlerCategoriesUpdate;
 import com.civicconnect.access.dto.HandlerOption;
 import com.civicconnect.access.dto.NewEmployee;
+import com.civicconnect.access.dto.PasswordChange;
 import com.civicconnect.access.event.StaffMemberRemovedEvent;
 import com.civicconnect.access.repository.ClientRepository;
 import com.civicconnect.access.repository.EmployeeRepository;
@@ -42,11 +43,13 @@ public class EmployeeService {
     private final CurrentUserService currentUser;
     private final StaffDirectory staffDirectory;
     private final ApplicationEventPublisher events;
+    private final EmployeeCredentials credentials;
 
     public EmployeeService(EmployeeRepository employeeRepository, ClientRepository clientRepository,
                            CategoryRepository categoryRepository, HandlerCategoryRepository handlerCategoryRepository,
                            PasswordEncoder passwordEncoder, CurrentUserService currentUser,
-                           StaffDirectory staffDirectory, ApplicationEventPublisher events) {
+                           StaffDirectory staffDirectory, ApplicationEventPublisher events,
+                           EmployeeCredentials credentials) {
         this.employeeRepository = employeeRepository;
         this.clientRepository = clientRepository;
         this.categoryRepository = categoryRepository;
@@ -55,6 +58,18 @@ public class EmployeeService {
         this.currentUser = currentUser;
         this.staffDirectory = staffDirectory;
         this.events = events;
+        this.credentials = credentials;
+    }
+
+    /**
+     * API-26: the logged-in employee changes their own password (also the default manager's first step).
+     * Not one transaction on purpose: the check and the update run as different database roles, see
+     * EmployeeCredentials.
+     */
+    public void changeOwnPassword(PasswordChange body) {
+        CurrentUser user = currentUser.get();
+        credentials.checkCurrentPassword(user.id(), body.currentPassword());
+        credentials.storeNewPassword(user.id(), body.password());
     }
 
     @Transactional(readOnly = true)
@@ -206,7 +221,7 @@ public class EmployeeService {
     }
 
     private void checkEmailFree(String email) {
-        if (employeeRepository.existsByEmailIgnoreCase(email) || clientRepository.existsByEmailIgnoreCase(email)) {
+        if (clientRepository.emailInUse(email)) {
             throw Errors.conflict(ErrorCode.CONFLICT, "This email address is already in use.");
         }
     }

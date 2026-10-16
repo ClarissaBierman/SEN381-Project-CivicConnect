@@ -4,9 +4,9 @@ name: CI
 
 on:
   pull_request:
-    branches: [ main ]
+    branches: [ main, prod ]
   push:
-    branches: [ main, backend ]
+    branches: [ main, backend, prod ]   # prod: Render deploys it only after these checks pass
 
 permissions:
   contents: read
@@ -232,3 +232,71 @@ jobs:
             civicconnect-frontend/test-results/
             civicconnect-backend/backend.log
           if-no-files-found: warn
+
+  # ARC-03 deployment image: builds the Dockerfile exactly as Render will, starts it against a database
+  # built from the same script as Supabase, and checks that one origin serves the app and the API.
+  # Render only deploys main after this and the other checks pass (render.yaml: autoDeployTrigger).
+  image:
+    name: Deployment image
+    runs-on: ubuntu-latest
+    needs: [ backend, frontend ]
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: [ '5432:5432' ]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7
+
+      - name: Generate test credentials
+        run: |
+          echo "APP_DB_PASSWORD=$(openssl rand -hex 16)" >> "$GITHUB_ENV"
+          echo "JWT_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+
+      - name: Build the test database
+        working-directory: civicconnect-backend
+        run: |
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN;"
+          psql -v ON_ERROR_STOP=1 -d postgres -f database/civicconnect_supabase_build.sql
+          psql -v ON_ERROR_STOP=1 -d postgres -c "ALTER ROLE civicconnect_app LOGIN PASSWORD '${APP_DB_PASSWORD}'"
+
+      - name: Build the image
+        run: docker build -t civicconnect:ci .
+
+      - name: Start the image with the free plan's memory (512 MB)
+        run: |
+          docker run -d --name civicconnect --network host --memory 512m \
+            -e PORT=8080 -e DB_URL=jdbc:postgresql://localhost:5432/postgres \
+            -e DB_USERNAME=civicconnect_app -e DB_PASSWORD="${APP_DB_PASSWORD}" \
+            -e FLYWAY_USER=postgres -e FLYWAY_PASSWORD=postgres -e JWT_SECRET="${JWT_SECRET}" \
+            civicconnect:ci
+
+      - name: Check health, the app and the API on one origin
+        run: |
+          for i in $(seq 1 90); do
+            if curl -sf http://localhost:8080/api/v1/health | grep -q '"UP"'; then break; fi
+            sleep 2
+          done
+          curl -sf http://localhost:8080/api/v1/health
+          curl -sf http://localhost:8080/ | grep -q '<app-root'
+          curl -sf http://localhost:8080/staff/requests | grep -q '<app-root'
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/v1/requests)" = "401"
+          echo "Image serves the app and the API"
+
+      - name: Container log
+        if: always()
+        run: docker logs civicconnect 2>&1 | tail -100

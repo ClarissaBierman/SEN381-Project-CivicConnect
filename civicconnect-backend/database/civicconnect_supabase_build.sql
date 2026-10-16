@@ -486,7 +486,8 @@ REVOKE ALL ON SCHEMA civicconnect FROM anon, authenticated;
 
 GRANT USAGE ON SCHEMA civicconnect
     TO civicconnect_app, civicconnect_client, civicconnect_staff, civicconnect_management;
-GRANT CREATE ON SCHEMA civicconnect TO civicconnect_app;      -- Flyway's history table only
+-- No CREATE for civicconnect_app: Flyway runs as the schema owner (FLYWAY_USER), and objects the app role
+-- created could be picked up by a SECURITY DEFINER function (V6, D-19).
 
 -- ---------- civicconnect_app (before login) ----------
 GRANT SELECT ON client, employee TO civicconnect_app;         -- login and /auth/me

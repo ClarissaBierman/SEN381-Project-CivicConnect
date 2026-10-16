@@ -1,0 +1,13 @@
+# Only the sources the Dockerfile needs; never local secrets or build output
+.git
+.github
+docs
+perf
+**/.env
+**/.env.*
+civicconnect-backend/target
+civicconnect-frontend/node_modules
+civicconnect-frontend/dist
+civicconnect-frontend/.angular
+civicconnect-frontend/playwright-report
+civicconnect-frontend/test-results

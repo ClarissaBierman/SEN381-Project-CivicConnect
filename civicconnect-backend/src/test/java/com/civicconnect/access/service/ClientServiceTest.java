@@ -6,7 +6,6 @@ import com.civicconnect.access.domain.Client;
 import com.civicconnect.access.dto.ClientContactResponse;
 import com.civicconnect.access.dto.ClientPatch;
 import com.civicconnect.access.repository.ClientRepository;
-import com.civicconnect.access.repository.EmployeeRepository;
 import com.civicconnect.common.error.ApiException;
 import com.civicconnect.common.error.ErrorCode;
 import com.civicconnect.common.ratelimit.LoginAttemptLimiter;
@@ -39,7 +38,7 @@ class ClientServiceTest {
         clients = mock(ClientRepository.class);
         currentUser = mock(CurrentUserService.class);
         limiter = new LoginAttemptLimiter(5, Duration.ofMinutes(15), new MutableClock());
-        service = new ClientService(clients, mock(EmployeeRepository.class), encoder, currentUser, limiter);
+        service = new ClientService(clients, encoder, currentUser, limiter);
 
         thabo = client(1);
         thabo.setPassword(encoder.encode("Password123!"));
@@ -109,7 +108,7 @@ class ClientServiceTest {
     @Test
     @DisplayName("Own profile, taken email, and activating or deactivating a client")
     void profileAndActivation() {
-        when(clients.existsByEmailIgnoreCase("taken@example.com")).thenReturn(true);
+        when(clients.emailInUse("taken@example.com")).thenReturn(true);
         when(clients.updateActive(eq(1L), eq(false), any())).thenReturn(1);
 
         assertThat(service.me().id()).isEqualTo(1L);

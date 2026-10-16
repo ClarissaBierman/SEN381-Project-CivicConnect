@@ -15,13 +15,17 @@ const NAV: Record<Role, NavLink[]> = {
     { path: '/requests/new', label: 'New Request' },
     { path: '/requests/profile', label: 'Profile' },
   ],
-  STAFF: [{ path: '/staff/requests', label: 'Requests' }],
+  STAFF: [
+    { path: '/staff/requests', label: 'Requests' },
+    { path: '/account', label: 'My account' },
+  ],
   MANAGEMENT: [
     { path: '/management/activity', label: 'Activity' },
     { path: '/management/requests', label: 'Requests' },
     { path: '/management/categories', label: 'Categories' },
     { path: '/management/staff', label: 'Staff' },
     { path: '/management/audit', label: 'Audit' },
+    { path: '/account', label: 'My account' },
   ],
 };
 

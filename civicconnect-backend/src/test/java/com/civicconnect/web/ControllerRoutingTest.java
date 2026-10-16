@@ -77,7 +77,7 @@ class ControllerRoutingTest {
     @DisplayName("Access endpoints")
     void accessEndpoints() throws Exception {
         expect(post("/api/v1/auth/register").content(
-                "{\"firstName\":\"A\",\"surname\":\"B\",\"email\":\"a@b.co\",\"password\":\"Secret123!\"}"), 201);
+                "{\"firstName\":\"A\",\"surname\":\"B\",\"email\":\"a@b.co\",\"password\":\"Secret123!\"}"), 202);
         expect(post("/api/v1/auth/login").content("{\"email\":\"a@b.co\",\"password\":\"x\"}"), 200);
         expect(post("/api/v1/auth/register").content("{\"firstName\":\"A\",\"surname\":\"B\",\"email\":\"a@b.co\",\"password\":\""
                 + "é".repeat(60) + "\"}"), 400);
@@ -92,6 +92,7 @@ class ControllerRoutingTest {
         expect(get("/api/v1/employees/3"), 200);
         expect(post("/api/v1/employees").content("{\"firstName\":\"A\",\"surname\":\"B\",\"email\":\"a@b.co\","
                 + "\"password\":\"Secret123!\",\"role\":\"STAFF\"}"), 201);
+        expect(patch("/api/v1/employees/me/password").content("{\"currentPassword\":\"Old12345!\",\"password\":\"New12345!\"}"), 204);
         expect(patch("/api/v1/employees/3").content("{\"active\":false}"), 200);
         expect(get("/api/v1/employees/3/categories"), 200);
         expect(put("/api/v1/employees/3/categories").content("{\"categoryIds\":[2,4]}"), 200);

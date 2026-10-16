@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { roleGuard } from './core/role.guard';
+import { AccountPage } from './features/account/account-page';
 import { LoginPage } from './features/login/login-page';
 import { CategoriesPage } from './features/management/categories-page';
 import { ActivityPage } from './features/management/activity-page';
@@ -73,6 +74,14 @@ export const routes: Routes = [
     component: AuditPage,
     canActivate: [roleGuard],
     data: { roles: ['MANAGEMENT'] },
+  },
+
+  // Staff and managers: own password (API-26)
+  {
+    path: 'account',
+    component: AccountPage,
+    canActivate: [roleGuard],
+    data: { roles: ['STAFF', 'MANAGEMENT'] },
   },
 
   { path: '', pathMatch: 'full', redirectTo: 'login' },

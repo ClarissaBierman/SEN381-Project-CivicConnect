@@ -18,6 +18,8 @@ const CLIENT_MESSAGES: Record<Field, string> = {
 };
 
 // API-01. Only requesters register themselves, staff accounts are created by Management.
+// The server gives the same answer for a new and an already registered email (D-25), so the login
+// page's notice is worded for both.
 @Component({
   selector: 'app-register-page',
   imports: [ReactiveFormsModule, RouterLink],
@@ -203,12 +205,6 @@ export class RegisterPage {
 
   private handleError(err: HttpErrorResponse): void {
     const problem = err.error as Partial<ApiProblem> | null;
-    if (err.status === 409) {
-      this.serverErrors.set({
-        email: problem?.detail ?? 'This email address is already registered.',
-      });
-      return;
-    }
     if (err.status === 400 && problem?.fieldErrors?.length) {
       const mapped: Partial<Record<Field, string>> = {};
       for (const fe of problem.fieldErrors) mapped[fe.field as Field] = fe.message;
