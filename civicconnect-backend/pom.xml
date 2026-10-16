@@ -30,6 +30,8 @@
 		<java.version>21</java.version>
 		<!-- Tests tagged "integration" need the database in .env; run them with: mvnw test -Pintegration -->
 		<excluded.test.groups>integration</excluded.test.groups>
+		<!-- Filled in by JaCoCo in the coverage profile; empty otherwise -->
+		<argLine></argLine>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -134,6 +136,9 @@
 				<artifactId>maven-surefire-plugin</artifactId>
 				<configuration>
 					<excludedGroups>${excluded.test.groups}</excludedGroups>
+					<!-- Tests do not run main(), which puts the JVM in UTC: do the same here, or Hibernate
+					     shifts stored times by the machine's offset (e.g. 2 hours on a SAST laptop) -->
+					<argLine>@{argLine} -Duser.timezone=UTC</argLine>
 				</configuration>
 			</plugin>
 		</plugins>

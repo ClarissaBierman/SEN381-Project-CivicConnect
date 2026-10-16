@@ -2,6 +2,7 @@ package com.civicconnect.common.error;
 
 import com.civicconnect.common.logging.LogSafe;
 import jakarta.servlet.http.HttpServletRequest;
+import org.hibernate.exception.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessResourceFailureException;
@@ -27,6 +28,7 @@ import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -70,8 +72,24 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         if (message.contains("ux_request_handler_active")) {
             return respond(ErrorCode.ALREADY_ASSIGNED, 409, "This request is already assigned.", request, null);
         }
-        log.warn("Data integrity violation on {}: {}", LogSafe.of(request.getRequestURI()), LogSafe.of(message));
+        log.warn("Data integrity violation on {}: {}", LogSafe.of(request.getRequestURI()), LogSafe.of(constraintOf(ex)));
         return respond(ErrorCode.CONFLICT, 409, "This change conflicts with existing data.", request, null);
+    }
+
+    /**
+     * D-40: only the constraint name (or the SQL state) goes into the log. The database message itself
+     * repeats the duplicate value, e.g. "Key (email)=(someone@example.com) already exists" (POPIA).
+     */
+    static String constraintOf(DataIntegrityViolationException ex) {
+        for (Throwable t = ex; t != null; t = t.getCause()) {
+            if (t instanceof ConstraintViolationException c && c.getConstraintName() != null) {
+                return "constraint " + c.getConstraintName();
+            }
+            if (t instanceof SQLException s) {
+                return "SQL state " + s.getSQLState();
+            }
+        }
+        return "no database detail";
     }
 
     @ExceptionHandler({CannotCreateTransactionException.class, DataAccessResourceFailureException.class})

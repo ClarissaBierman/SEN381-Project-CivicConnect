@@ -30,7 +30,7 @@ request list** (`GET /api/v1/requests`, API-07).
 
 1. Build a **test** database with `civicconnect-backend/database/civicconnect_supabase_build.sql`
    (never the live database).
-2. Start the backend against it, so Flyway applies V3 to V5 (the seed needs the V4 `priority` column).
+2. Start the backend against it, so Flyway applies V3 and later (the seed needs the V4 `priority` column).
    Raise the **per-IP** limits for the run only (see Limitations):
    ```
    java -Dcivicconnect.rate-limit.ip.requests-per-minute=100000 \
