@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # ARC-03 single deployable: one image, one jar that serves the Angular app and the /api REST endpoints
-# from the same origin. Built by Render on each deploy of main, and by the CI "Deployment image" job on
+# from the same origin. Built by Render on each deploy of prod, and by the CI "Deployment image" job on
 # every push and pull request, so a broken build is caught before Render tries it.
 # Secrets (DB_URL, DB_USERNAME, DB_PASSWORD, FLYWAY_USER, FLYWAY_PASSWORD, JWT_SECRET) are environment
 # variables set on the host - nothing secret is copied into the image.

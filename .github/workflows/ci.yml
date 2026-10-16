@@ -1,5 +1,5 @@
-# CI quality gate (DEC-013). Runs on every pull request to main and every push to main/backend.
-# Make the "Backend" and "Frontend" checks required in Settings > Branches > main, so a red build blocks merging.
+# CI quality gate (DEC-013). Runs on every pull request to main/prod and every push to main/backend/prod.
+# Make the jobs required checks in Settings > Branches for main and prod, so a red build blocks merging.
 name: CI
 
 on:
@@ -235,7 +235,7 @@ jobs:
 
   # ARC-03 deployment image: builds the Dockerfile exactly as Render will, starts it against a database
   # built from the same script as Supabase, and checks that one origin serves the app and the API.
-  # Render only deploys main after this and the other checks pass (render.yaml: autoDeployTrigger).
+  # Render only deploys prod after this and the other checks pass (render.yaml: autoDeployTrigger).
   image:
     name: Deployment image
     runs-on: ubuntu-latest

@@ -1,8 +1,9 @@
 # Backend build output
 civicconnect-backend/target/
 
-# Backend local config (contains real DB password - each dev has their own copy)
-civicconnect-backend/src/main/resources/application.properties
+# Backend local secrets (database passwords, JWT secret - each dev has their own copy; see .env.example).
+# application.properties is tracked: it only reads these as ${...} environment variables (DEC-008).
+civicconnect-backend/.env
 
 # Frontend
 civicconnect-frontend/node_modules/
