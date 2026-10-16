@@ -33,6 +33,8 @@ export class RequesterPage implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   // Each click cancels the previous request's load, so only the last one clicked is shown
   private readonly selection = new Subject<number>();
+  // Each page load cancels the previous one, so an older page cannot replace a newer one (D-38)
+  private readonly listLoads = new Subject<void>();
 
   protected readonly categories = signal<Category[]>([]);
   protected readonly myRequests = signal<Page<RequestSummary> | null>(null);
@@ -70,6 +72,24 @@ export class RequesterPage implements OnInit {
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe((detail) => this.selected.set(detail));
+    this.listLoads
+      .pipe(
+        // Marker 4: API-05 - own requests only, newest first, paged.
+        switchMap(() =>
+          this.api.getMyRequests(this.pageIndex(), PAGE_SIZE).pipe(
+            catchError((p) => {
+              this.detailError.set(problemMessage(p));
+              return of(null);
+            }),
+          ),
+        ),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((page) => {
+        if (!page) return;
+        this.myRequests.set(page);
+        if (!this.selected() && page.content.length) this.select(page.content[0].id);
+      });
     this.loadMine();
   }
 
@@ -138,14 +158,7 @@ export class RequesterPage implements OnInit {
   }
 
   private loadMine(): void {
-    // Marker 4: API-05 - own requests only, newest first, paged.
-    this.api.getMyRequests(this.pageIndex(), PAGE_SIZE).subscribe({
-      next: (page) => {
-        this.myRequests.set(page);
-        if (!this.selected() && page.content.length) this.select(page.content[0].id);
-      },
-      error: (p) => this.detailError.set(problemMessage(p)),
-    });
+    this.listLoads.next();
   }
 
   private showProblem(p: ApiProblem): void {

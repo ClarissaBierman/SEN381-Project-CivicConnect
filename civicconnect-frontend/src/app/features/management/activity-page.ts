@@ -121,13 +121,15 @@ export class ActivityPage implements OnInit {
   protected apply(): void {
     const f = this.filters.getRawValue();
     this.reportError.set(null);
-    this.api.getActivity(f.from || null, f.to || null, Number(f.categoryId) || null, f.status || null).subscribe({
-      next: (r) => {
-        this.report.set(r);
-        this.lastRefreshed.set(new Date());
-      },
-      error: (p) => this.reportError.set(problemMessage(p)),
-    });
+    this.api
+      .getActivity(f.from || null, f.to || null, Number(f.categoryId) || null, f.status || null)
+      .subscribe({
+        next: (r) => {
+          this.report.set(r);
+          this.lastRefreshed.set(new Date());
+        },
+        error: (p) => this.reportError.set(problemMessage(p)),
+      });
     this.loadCounts();
     this.loadOpenRequests();
   }
@@ -181,11 +183,20 @@ export class ActivityPage implements OnInit {
   private loadCounts(): void {
     const f = this.filters.getRawValue();
     const categoryId = Number(f.categoryId) || null;
-    const base = { status: null, open: true, categoryId, sort: 'createdAt,desc' as const, page: 0, size: 1 };
+    const base = {
+      status: null,
+      open: true,
+      categoryId,
+      sort: 'createdAt,desc' as const,
+      page: 0,
+      size: 1,
+    };
     this.olderBefore.set(f.from || null);
     forkJoin({
       unassigned: this.api.getRequests({ ...base, unassigned: true, from: null, to: null }),
-      older: f.from ? this.api.getRequests({ ...base, from: null, to: dayBefore(f.from) }) : of(null),
+      older: f.from
+        ? this.api.getRequests({ ...base, from: null, to: dayBefore(f.from) })
+        : of(null),
     }).subscribe({
       next: ({ unassigned, older }) => {
         this.unassignedCount.set(unassigned.totalElements);
@@ -195,11 +206,18 @@ export class ActivityPage implements OnInit {
     });
   }
 
-  // FR-013: the picker follows the category and date filters (open requests only)
+  // FR-013: the picker follows the status, category and date filters (open requests only)
   private loadOpenRequests(): void {
     const f = this.filters.getRawValue();
     const categoryId = Number(f.categoryId) || null;
-    const base = { status: null, open: true, categoryId, sort: 'createdAt,desc' as const, page: 0, size: LIST_SIZE };
+    const base = {
+      status: f.status || null,
+      open: true,
+      categoryId,
+      sort: 'createdAt,desc' as const,
+      page: 0,
+      size: LIST_SIZE,
+    };
     const mode = this.listMode();
     const query =
       mode === 'unassigned'
