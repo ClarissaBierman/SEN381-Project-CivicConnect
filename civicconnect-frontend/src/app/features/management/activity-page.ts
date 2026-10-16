@@ -195,11 +195,11 @@ export class ActivityPage implements OnInit {
     });
   }
 
-  // FR-013: the picker follows the category and date filters (open requests only)
+  // FR-013: the picker follows the status, category and date filters (open requests only)
   private loadOpenRequests(): void {
     const f = this.filters.getRawValue();
     const categoryId = Number(f.categoryId) || null;
-    const base = { status: null, open: true, categoryId, sort: 'createdAt,desc' as const, page: 0, size: LIST_SIZE };
+    const base = { status: f.status || null, open: true, categoryId, sort: 'createdAt,desc' as const, page: 0, size: LIST_SIZE };
     const mode = this.listMode();
     const query =
       mode === 'unassigned'

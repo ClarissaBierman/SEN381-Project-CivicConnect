@@ -259,6 +259,7 @@ export class StaffPage implements OnInit {
     this.run(this.api.updateEmployee(e.id, { active: !e.active }), e.active ? 'Account deactivated.' : 'Account activated.');
   }
 
+  // The reply only updates the boxes if the same employee is still selected (D-38).
   protected saveCategories(e: Employee): void {
     this.busy.set(true);
     this.detailError.set(null);
@@ -268,12 +269,15 @@ export class StaffPage implements OnInit {
       .pipe(finalize(() => this.busy.set(false)))
       .subscribe({
         next: (list) => {
+          if (this.selected()?.id !== e.id) return;
           const ids = new Set(list.map((c) => c.catId!));
           this.chosen.set(new Set(ids));
           this.saved.set(ids);
           this.message.set('Categories saved.');
         },
-        error: (p) => this.detailError.set(problemMessage(p)),
+        error: (p) => {
+          if (this.selected()?.id === e.id) this.detailError.set(problemMessage(p));
+        },
       });
   }
 
