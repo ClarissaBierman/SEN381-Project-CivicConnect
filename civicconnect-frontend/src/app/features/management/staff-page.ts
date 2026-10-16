@@ -26,33 +26,18 @@ type NewField = 'firstName' | 'surname' | 'email' | 'password' | 'phone';
         }
         <table>
           <thead>
-            <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Role</th>
-              <th>Status</th>
-            </tr>
+            <tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th></tr>
           </thead>
           <tbody>
             @for (e of employees(); track e.id) {
               <tr class="clickable" [class.selected]="selected()?.id === e.id" (click)="select(e)">
-                <td>
-                  <button
-                    type="button"
-                    class="link-btn row-link"
-                    [attr.aria-pressed]="selected()?.id === e.id"
-                  >
-                    {{ e.firstName }} {{ e.surname }}
-                  </button>
-                </td>
+                <td><button type="button" class="link-btn row-link" [attr.aria-pressed]="selected()?.id === e.id">{{ e.firstName }} {{ e.surname }}</button></td>
                 <td>{{ e.email }}</td>
                 <td>{{ roleLabels[e.role] }}</td>
                 <td>{{ e.active ? 'Active' : 'Inactive' }}</td>
               </tr>
             } @empty {
-              <tr>
-                <td colspan="4" class="hint">No employees loaded.</td>
-              </tr>
+              <tr><td colspan="4" class="hint">No employees loaded.</td></tr>
             }
           </tbody>
         </table>
@@ -62,45 +47,23 @@ type NewField = 'firstName' | 'surname' | 'email' | 'password' | 'phone';
           <div class="inline-row">
             <div class="field">
               <label for="firstName">First name</label>
-              <input
-                id="firstName"
-                formControlName="firstName"
-                [class.invalid]="!!newError('firstName')"
-                [attr.aria-invalid]="!!newError('firstName')"
-                [attr.aria-describedby]="newError('firstName') ? 'new-firstName-error' : null"
-              />
-              @if (newError('firstName'); as m) {
-                <small class="error" id="new-firstName-error">{{ m }}</small>
-              }
+              <input id="firstName" formControlName="firstName" [class.invalid]="!!newError('firstName')" [attr.aria-invalid]="!!newError('firstName')"
+                     [attr.aria-describedby]="newError('firstName') ? 'new-firstName-error' : null" />
+              @if (newError('firstName'); as m) { <small class="error" id="new-firstName-error">{{ m }}</small> }
             </div>
             <div class="field">
               <label for="surname">Surname</label>
-              <input
-                id="surname"
-                formControlName="surname"
-                [class.invalid]="!!newError('surname')"
-                [attr.aria-invalid]="!!newError('surname')"
-                [attr.aria-describedby]="newError('surname') ? 'new-surname-error' : null"
-              />
-              @if (newError('surname'); as m) {
-                <small class="error" id="new-surname-error">{{ m }}</small>
-              }
+              <input id="surname" formControlName="surname" [class.invalid]="!!newError('surname')" [attr.aria-invalid]="!!newError('surname')"
+                     [attr.aria-describedby]="newError('surname') ? 'new-surname-error' : null" />
+              @if (newError('surname'); as m) { <small class="error" id="new-surname-error">{{ m }}</small> }
             </div>
           </div>
           <div class="inline-row">
             <div class="field">
               <label for="email">Email</label>
-              <input
-                id="email"
-                type="email"
-                formControlName="email"
-                [class.invalid]="!!newError('email')"
-                [attr.aria-invalid]="!!newError('email')"
-                [attr.aria-describedby]="newError('email') ? 'new-email-error' : null"
-              />
-              @if (newError('email'); as m) {
-                <small class="error" id="new-email-error">{{ m }}</small>
-              }
+              <input id="email" type="email" formControlName="email" [class.invalid]="!!newError('email')" [attr.aria-invalid]="!!newError('email')"
+                     [attr.aria-describedby]="newError('email') ? 'new-email-error' : null" />
+              @if (newError('email'); as m) { <small class="error" id="new-email-error">{{ m }}</small> }
             </div>
             <div class="field">
               <label for="phone">Phone (optional)</label>
@@ -110,18 +73,10 @@ type NewField = 'firstName' | 'surname' | 'email' | 'password' | 'phone';
           <div class="inline-row">
             <div class="field">
               <label for="password">Temporary password</label>
-              <input
-                id="password"
-                type="password"
-                formControlName="password"
-                autocomplete="new-password"
-                [class.invalid]="!!newError('password')"
-                [attr.aria-invalid]="!!newError('password')"
-                [attr.aria-describedby]="newError('password') ? 'new-password-error' : null"
-              />
-              @if (newError('password'); as m) {
-                <small class="error" id="new-password-error">{{ m }}</small>
-              }
+              <input id="password" type="password" formControlName="password" autocomplete="new-password"
+                     [class.invalid]="!!newError('password')" [attr.aria-invalid]="!!newError('password')"
+                     [attr.aria-describedby]="newError('password') ? 'new-password-error' : null" />
+              @if (newError('password'); as m) { <small class="error" id="new-password-error">{{ m }}</small> }
             </div>
             <div class="field">
               <label for="role">Role</label>
@@ -158,14 +113,7 @@ type NewField = 'firstName' | 'surname' | 'email' | 'password' | 'phone';
                 <option [ngValue]="r">{{ roleLabels[r] }}</option>
               }
             </select>
-            <button
-              type="button"
-              class="btn"
-              [disabled]="busy() || editRole === e.role"
-              (click)="saveRole(e)"
-            >
-              Save role
-            </button>
+            <button type="button" class="btn" [disabled]="busy() || editRole === e.role" (click)="saveRole(e)">Save role</button>
           </div>
           <div class="inline-row">
             <span>Status: {{ e.active ? 'Active' : 'Inactive' }}</span>
@@ -174,9 +122,8 @@ type NewField = 'firstName' | 'surname' | 'email' | 'password' | 'phone';
             </button>
           </div>
           <small class="hint">
-            Deactivating a staff member, or making them a manager, takes them off their open
-            requests (Assigned ones go back to the queue). The last active manager cannot be
-            deactivated.
+            Deactivating a staff member, or making them a manager, takes them off their open requests
+            (Assigned ones go back to the queue). The last active manager cannot be deactivated.
           </small>
 
           @if (e.role === 'STAFF') {
@@ -185,27 +132,16 @@ type NewField = 'firstName' | 'surname' | 'email' | 'password' | 'phone';
               <legend class="sr-only">Categories this staff member covers</legend>
               @for (c of categories(); track c.catId) {
                 <label class="inline-row">
-                  <input
-                    type="checkbox"
-                    [checked]="chosen().has(c.catId!)"
-                    (change)="toggleCategory(c.catId!)"
-                  />
+                  <input type="checkbox" [checked]="chosen().has(c.catId!)" (change)="toggleCategory(c.catId!)" />
                   {{ c.catName }}{{ c.active ? '' : ' (inactive)' }}
                 </label>
               }
             </fieldset>
             <div class="inline-row">
-              <button
-                type="button"
-                class="btn"
-                [disabled]="busy() || loadingCategories() || !categoriesChanged()"
-                (click)="saveCategories(e)"
-              >
+              <button type="button" class="btn" [disabled]="busy() || loadingCategories() || !categoriesChanged()" (click)="saveCategories(e)">
                 Save categories
               </button>
-              <small class="hint"
-                >Removing a category returns their open requests in it to the queue.</small
-              >
+              <small class="hint">Removing a category returns their open requests in it to the queue.</small>
             </div>
           }
         } @else {
@@ -316,17 +252,11 @@ export class StaffPage implements OnInit {
   }
 
   protected saveRole(e: Employee): void {
-    this.run(
-      this.api.updateEmployee(e.id, { role: this.editRole }),
-      `Role changed to ${this.roleLabels[this.editRole]}.`,
-    );
+    this.run(this.api.updateEmployee(e.id, { role: this.editRole }), `Role changed to ${this.roleLabels[this.editRole]}.`);
   }
 
   protected toggleActive(e: Employee): void {
-    this.run(
-      this.api.updateEmployee(e.id, { active: !e.active }),
-      e.active ? 'Account deactivated.' : 'Account activated.',
-    );
+    this.run(this.api.updateEmployee(e.id, { active: !e.active }), e.active ? 'Account deactivated.' : 'Account activated.');
   }
 
   // The reply only updates the boxes if the same employee is still selected (D-38).

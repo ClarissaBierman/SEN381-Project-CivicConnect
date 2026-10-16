@@ -101,9 +101,7 @@ export class RequestQueuePage implements OnInit {
           forkJoin({ detail: this.api.getRequest(id), audit: this.api.getAudit(id) }).pipe(
             switchMap(({ detail, audit }) =>
               this.isManager() && ASSIGNABLE.includes(detail.status)
-                ? this.api
-                    .getHandlers(detail.categoryId)
-                    .pipe(map((handlers) => ({ detail, audit, handlers })))
+                ? this.api.getHandlers(detail.categoryId).pipe(map((handlers) => ({ detail, audit, handlers })))
                 : of({ detail, audit, handlers: [] as HandlerOption[] }),
             ),
             catchError((p) => {
@@ -149,12 +147,10 @@ export class RequestQueuePage implements OnInit {
       .subscribe((page) => {
         if (page) this.result.set(page);
       });
-    this.filters.valueChanges
-      .pipe(debounceTime(200), takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => {
-        this.pageIndex.set(0);
-        this.loadList();
-      });
+    this.filters.valueChanges.pipe(debounceTime(200), takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      this.pageIndex.set(0);
+      this.loadList();
+    });
     this.loadList();
   }
 
