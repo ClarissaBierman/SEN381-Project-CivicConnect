@@ -195,13 +195,20 @@ export class RequestQueuePage implements OnInit {
     this.run(this.api.assign(d.id, this.isManager() ? (this.assignTo ?? undefined) : undefined));
   }
 
+  // A reply that arrives after the manager opened another request is ignored, otherwise the wrong
+  // requester is shown and Deactivate would act on them (D-38).
   protected showContact(): void {
     const d = this.detail();
     if (!d) return;
+    const requestId = d.id;
     this.contactError.set(null);
     this.management.getClientContact(d.requesterNumber).subscribe({
-      next: (c) => this.contact.set(c),
-      error: (p) => this.contactError.set(problemMessage(p)),
+      next: (c) => {
+        if (this.selectedId === requestId) this.contact.set(c);
+      },
+      error: (p) => {
+        if (this.selectedId === requestId) this.contactError.set(problemMessage(p));
+      },
     });
   }
 
@@ -219,11 +226,16 @@ export class RequestQueuePage implements OnInit {
       this.confirmDeactivate.set(true);
       return;
     }
+    const requestId = this.selectedId;
     this.confirmDeactivate.set(false);
     this.contactError.set(null);
     this.management.setClientActive(c.id, active).subscribe({
-      next: () => this.contact.set({ ...c, active }),
-      error: (p) => this.contactError.set(problemMessage(p)),
+      next: () => {
+        if (this.selectedId === requestId) this.contact.set({ ...c, active });
+      },
+      error: (p) => {
+        if (this.selectedId === requestId) this.contactError.set(problemMessage(p));
+      },
     });
   }
 
