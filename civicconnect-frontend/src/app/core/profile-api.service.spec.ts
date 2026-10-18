@@ -21,7 +21,7 @@ describe('ProfileApiService', () => {
     const req = http.expectOne('/api/v1/clients/me');
     expect(req.request.method).toBe('PATCH');
     expect(req.request.body).toEqual({ email: 'new@x.co', currentPassword: 'old' });
-    req.flush({ id: 1, firstName: 'A', surname: 'B', email: 'new@x.co', phone: null, dateOfBirth: null, active: true });
+    req.flush({ id: 1, firstName: 'A', surname: 'B', email: 'new@x.co', phone: null, active: true });
     expect((await result).email).toBe('new@x.co');
   });
 

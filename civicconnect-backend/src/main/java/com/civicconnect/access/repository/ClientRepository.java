@@ -37,7 +37,7 @@ public interface ClientRepository extends JpaRepository<Client, Long> {
 
     /**
      * Contact details only - the columns Management may read (V3 grants). Never loads the whole row,
-     * so the password hash and date of birth are not read.
+     * so the password hash is not read.
      */
     @Query("""
             select c.clientId as id, c.firstName as firstName, c.surname as surname,

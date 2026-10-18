@@ -3,7 +3,6 @@ package com.civicconnect.access.dto;
 import com.civicconnect.common.time.Time;
 import com.civicconnect.access.domain.Client;
 
-import java.time.LocalDate;
 import java.time.Instant;
 
 public record ClientResponse(
@@ -12,12 +11,11 @@ public record ClientResponse(
         String surname,
         String email,
         String phone,
-        LocalDate dateOfBirth,
         boolean active,
         Instant createdAt
 ) {
     public static ClientResponse from(Client c) {
         return new ClientResponse(c.getClientId(), c.getFirstName(), c.getSurname(), c.getEmail(), c.getPhone(),
-                c.getDateOfBirth(), c.isActive(), Time.toInstant(c.getCreatedAt()));
+                c.isActive(), Time.toInstant(c.getCreatedAt()));
     }
 }

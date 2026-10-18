@@ -64,7 +64,6 @@ public class ClientService {
         if (body.firstName() != null) c.setFirstName(body.firstName().trim());
         if (body.surname() != null) c.setSurname(body.surname().trim());
         if (body.phone() != null) c.setPhone(Text.blankToNull(body.phone())); // "" clears it
-        if (body.dateOfBirth() != null) c.setDateOfBirth(body.dateOfBirth());
         if (body.password() != null) c.setPassword(passwordEncoder.encode(body.password()));
         c.setUpdatedAt(Time.now());
         return ClientResponse.from(c);
@@ -72,7 +71,7 @@ public class ClientService {
 
     /**
      * Management: a client's contact details, to contact them about a request. Reads only the
-     * contact columns (no date of birth, no password hash) and logs who looked (POPIA accountability -
+     * contact columns (no password hash) and logs who looked (POPIA accountability -
      * reads are not in the audit trail, which only records changes).
      */
     @Transactional(readOnly = true)
