@@ -61,7 +61,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
-    public ResponseEntity<Object> handleVersionConflict(ObjectOptimisticLockingFailureException ex, HttpServletRequest request) {
+    public ResponseEntity<Object> handleVersionConflict(HttpServletRequest request) {
         return respond(ErrorCode.VERSION_CONFLICT, 409,
                 "This request was updated by someone else - please refresh.", request, null);
     }
@@ -100,12 +100,12 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     @ExceptionHandler({AccessDeniedException.class, AuthorizationDeniedException.class})
-    public ResponseEntity<Object> handleAccessDenied(Exception ex, HttpServletRequest request) {
+    public ResponseEntity<Object> handleAccessDenied(HttpServletRequest request) {
         return respond(ErrorCode.FORBIDDEN, 403, "You do not have access.", request, null);
     }
 
     @ExceptionHandler(AuthenticationException.class)
-    public ResponseEntity<Object> handleAuthentication(AuthenticationException ex, HttpServletRequest request) {
+    public ResponseEntity<Object> handleAuthentication(HttpServletRequest request) {
         return respond(ErrorCode.UNAUTHENTICATED, 401, "Please log in.", request, null);
     }
 
