@@ -2,7 +2,6 @@ package com.civicconnect.access.domain;
 
 import com.civicconnect.common.time.Time;
 import jakarta.persistence.*;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
@@ -32,9 +31,6 @@ public class Client {
 
     @Column(name = "updated_at", nullable = true)
     private LocalDateTime updatedAt = Time.now();
-
-    @Column(name = "date_of_birth")
-    private LocalDate dateOfBirth;
 
     @Column(name = "phone", length = 30)
     private String phone;
@@ -66,8 +62,6 @@ public class Client {
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
 
-    public LocalDate getDateOfBirth() { return dateOfBirth; }
-    public void setDateOfBirth(LocalDate dateOfBirth) { this.dateOfBirth = dateOfBirth; }
 
     public String getPhone() { return phone; }
     public void setPhone(String phone) { this.phone = phone; }

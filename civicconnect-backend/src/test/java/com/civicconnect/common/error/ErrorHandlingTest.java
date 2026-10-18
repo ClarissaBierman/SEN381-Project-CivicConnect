@@ -13,8 +13,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.authentication.BadCredentialsException;
 
 import java.sql.SQLException;
 
@@ -49,8 +47,8 @@ class ErrorHandlingTest {
         ResponseEntity<Object> integrity = handler.handleIntegrity(new DataIntegrityViolationException("fk violation"), request);
         assertThat(body(integrity).code()).isEqualTo("CONFLICT");
 
-        assertThat(body(handler.handleAccessDenied(new AccessDeniedException("no"), request)).status()).isEqualTo(403);
-        assertThat(body(handler.handleAuthentication(new BadCredentialsException("no"), request)).status()).isEqualTo(401);
+        assertThat(body(handler.handleAccessDenied(request)).status()).isEqualTo(403);
+        assertThat(body(handler.handleAuthentication(request)).status()).isEqualTo(401);
         assertThat(body(handler.handleApi(new ApiException(ErrorCode.LAST_MANAGER, "Last."), request)).status()).isEqualTo(422);
     }
 

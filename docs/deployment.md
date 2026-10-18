@@ -60,10 +60,11 @@ database behind the public site (D-31). Integration tests only run against a loc
    - Render can only reach IPv4 addresses and Supabase's direct connection is IPv6, so always use
      the **session pooler** (port 5432) - never `db.<project-ref>.supabase.co`, and never the
      transaction pooler (port 6543, which breaks Hibernate's prepared statements).
-6. Pool size: the app opens up to 10 connections, plus one for Flyway at start-up, and during a
-   deploy the old and new versions briefly run together (D-39). In the project's database settings,
-   check the session pooler's pool size; if it is below about 22, ask the team whether to lower
-   `spring.datasource.hikari.maximum-pool-size`.
+6. Pool size: each app instance opens up to 10 connections as `civicconnect_app`, and during a deploy
+   the old and new versions briefly run together, so the app user needs 20 (D-39). Flyway connects as
+   `postgres`, which has its own pool. The pooler's pool size is per user and database: in
+   Database settings > Connection pooling it is set to **20** (the Nano default is 15). Do not raise
+   `spring.datasource.hikari.maximum-pool-size` above 10 without raising the pool size too.
 
 ### 3. Create the Render service
 

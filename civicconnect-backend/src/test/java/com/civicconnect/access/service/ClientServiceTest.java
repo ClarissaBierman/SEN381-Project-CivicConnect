@@ -47,7 +47,7 @@ class ClientServiceTest {
     }
 
     private static ClientPatch patch(String email, String password, String currentPassword) {
-        return new ClientPatch(null, null, email, null, null, password, currentPassword);
+        return new ClientPatch(null, null, email, null, password, currentPassword);
     }
 
     @Test
@@ -81,7 +81,7 @@ class ClientServiceTest {
     @Test
     @DisplayName("Name and phone changes do not need the current password; re-sending the same email does not either")
     void otherFieldsDoNotNeedPassword() {
-        service.updateMe(new ClientPatch("Thabiso", null, "CLIENT1@example.com", "0820000009", null, null, null));
+        service.updateMe(new ClientPatch("Thabiso", null, "CLIENT1@example.com", "0820000009", null, null));
 
         assertThat(thabo.getFirstName()).isEqualTo("Thabiso");
         assertThat(thabo.getPhone()).isEqualTo("0820000009");

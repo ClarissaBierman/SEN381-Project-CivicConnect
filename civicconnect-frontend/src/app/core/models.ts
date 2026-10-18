@@ -197,7 +197,6 @@ export interface ClientProfile {
   surname: string;
   email: string;
   phone: string | null;
-  dateOfBirth: string | null;
   active: boolean;
 }
 
@@ -206,7 +205,6 @@ export interface ProfileChange {
   firstName?: string;
   surname?: string;
   phone?: string | null;
-  dateOfBirth?: string;
   email?: string;
   password?: string;
   currentPassword?: string;
