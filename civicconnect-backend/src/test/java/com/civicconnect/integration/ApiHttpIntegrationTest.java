@@ -20,6 +20,8 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Objects;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.endsWith;
@@ -258,9 +260,10 @@ class ApiHttpIntegrationTest {
         }
         // At least the burst of 120 got through (a few more may, as tokens refill at 2 per second)
         assertThat(allowed).isBetween(120, 140);
-        assertThat(refused).as("eventually refused").isNotNull();
-        assertThat(refused.getResponse().getHeader(HttpHeaders.RETRY_AFTER)).isNotBlank();
-        assertThat(refused.getResponse().getContentAsString()).contains("TOO_MANY_REQUESTS");
+        // requireNonNull rather than assertThat(...).isNotNull(): static analysis sees that it stops on null (CodeQL #5)
+        MvcResult tooMany = Objects.requireNonNull(refused, "never refused with 429");
+        assertThat(tooMany.getResponse().getHeader(HttpHeaders.RETRY_AFTER)).isNotBlank();
+        assertThat(tooMany.getResponse().getContentAsString()).contains("TOO_MANY_REQUESTS");
 
         call(get("/api/v1/categories"), requester(THABO)).andExpect(status().isOk());
     }

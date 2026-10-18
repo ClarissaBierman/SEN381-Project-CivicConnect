@@ -17,14 +17,23 @@ public class CurrentUserService {
         return find().orElseThrow(() -> Errors.unauthenticated("Please log in."));
     }
 
-    /** The logged-in user, if there is one. */
+    /**
+     * The logged-in user, if there is one. ActiveAccountJwtConverter already rejects a token with a bad
+     * subject or role; the catch keeps a bad token a 401 here too, never a 500 (CodeQL #11).
+     */
     public Optional<CurrentUser> find() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !(auth.getPrincipal() instanceof Jwt jwt)) {
             return Optional.empty();
         }
-        return Optional.of(new CurrentUser(
-                Long.valueOf(jwt.getSubject()),
-                CurrentUser.Role.valueOf(jwt.getClaimAsString(JwtService.ROLE_CLAIM))));
+        String role = jwt.getClaimAsString(JwtService.ROLE_CLAIM);
+        if (role == null) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(new CurrentUser(Long.parseLong(jwt.getSubject()), CurrentUser.Role.valueOf(role)));
+        } catch (IllegalArgumentException e) {  // also NumberFormatException: subject missing or not a number
+            return Optional.empty();
+        }
     }
 }

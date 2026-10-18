@@ -83,6 +83,17 @@ class JwtSecurityTest {
     }
 
     @Test
+    @DisplayName("A token whose subject is not a number gives no current user (401, not 500)")
+    void badSubjectNoUser() {
+        Jwt jwt = Jwt.withTokenValue("t").header("alg", "HS256")
+                .subject("not-a-number").claim(JwtService.ROLE_CLAIM, "REQUESTER").build();
+        SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt));
+
+        assertThat(new CurrentUserService().find()).isEmpty();
+        assertApiError(ErrorCode.UNAUTHENTICATED, () -> new CurrentUserService().get());
+    }
+
+    @Test
     @DisplayName("Without a token there is no current user")
     void noTokenNoUser() {
         assertApiError(ErrorCode.UNAUTHENTICATED, () -> new CurrentUserService().get());

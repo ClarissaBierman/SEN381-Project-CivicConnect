@@ -5,17 +5,13 @@ import { ApiProblem, ClientProfile, ProfileChange } from '../../core/models';
 import { problemMessage } from '../../core/problem-message';
 import { ProfileApiService } from '../../core/profile-api.service';
 
-type Field = 'firstName' | 'surname' | 'email' | 'phone' | 'dateOfBirth' | 'password' | 'confirmPassword' | 'currentPassword';
-
-const localIsoDate = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+type Field = 'firstName' | 'surname' | 'email' | 'phone' | 'password' | 'confirmPassword' | 'currentPassword';
 
 const CLIENT_MESSAGES: Record<Field, string> = {
   firstName: 'Enter your first name (max 100 characters).',
   surname: 'Enter your surname (max 100 characters).',
   email: 'Enter a valid email address.',
   phone: 'Phone number can be at most 30 characters.',
-  dateOfBirth: 'Date of birth must be in the past.',
   password: 'Password must be 8 to 72 characters.',
   confirmPassword: 'Passwords do not match.',
   currentPassword: 'Enter your current password to change your email or password.',
@@ -57,13 +53,6 @@ const CLIENT_MESSAGES: Record<Field, string> = {
           <input id="phone" type="tel" formControlName="phone" autocomplete="tel" [class.invalid]="!!error('phone')" [attr.aria-invalid]="!!error('phone')"
                    [attr.aria-describedby]="error('phone') ? 'phone-error' : null" />
           @if (error('phone'); as m) { <span class="error" id="phone-error">{{ m }}</span> }
-        </div>
-
-        <div class="field">
-          <label for="dateOfBirth">Date of birth (optional)</label>
-          <input id="dateOfBirth" type="date" formControlName="dateOfBirth" [max]="today" [class.invalid]="!!error('dateOfBirth')" [attr.aria-invalid]="!!error('dateOfBirth')"
-                   [attr.aria-describedby]="error('dateOfBirth') ? 'dateOfBirth-error' : null" />
-          @if (error('dateOfBirth'); as m) { <span class="error" id="dateOfBirth-error">{{ m }}</span> }
         </div>
 
         <h2>Sign-in details</h2>
@@ -116,8 +105,6 @@ export class ProfilePage implements OnInit {
   private readonly api = inject(ProfileApiService);
   private readonly fb = inject(FormBuilder);
 
-  // Local date (toISOString() is UTC, which is still "yesterday" between 00:00 and 02:00 in SAST)
-  protected readonly today = localIsoDate(new Date());
   protected readonly profile = signal<ClientProfile | null>(null);
   protected readonly submitted = signal(false);
   protected readonly busy = signal(false);
@@ -131,7 +118,6 @@ export class ProfilePage implements OnInit {
     surname: ['', [Validators.required, Validators.maxLength(100)]],
     email: ['', [Validators.required, Validators.email, Validators.maxLength(255)]],
     phone: ['', Validators.maxLength(30)],
-    dateOfBirth: [''],
     password: ['', [Validators.minLength(8), Validators.maxLength(72)]],
     confirmPassword: [''],
     currentPassword: [''],
@@ -161,8 +147,6 @@ export class ProfilePage implements OnInit {
         return v.password && v.confirmPassword !== v.password ? CLIENT_MESSAGES.confirmPassword : null;
       case 'currentPassword':
         return this.needsCurrentPassword() && !v.currentPassword ? CLIENT_MESSAGES.currentPassword : null;
-      case 'dateOfBirth':
-        return v.dateOfBirth && v.dateOfBirth >= this.today ? CLIENT_MESSAGES.dateOfBirth : null;
       default:
         return control.invalid ? CLIENT_MESSAGES[field] : null;
     }
@@ -175,7 +159,7 @@ export class ProfilePage implements OnInit {
     this.serverErrors.set({});
     const p = this.profile();
     if (!p) return;
-    const fields: Field[] = ['firstName', 'surname', 'email', 'phone', 'dateOfBirth', 'password', 'confirmPassword', 'currentPassword'];
+    const fields: Field[] = ['firstName', 'surname', 'email', 'phone', 'password', 'confirmPassword', 'currentPassword'];
     if (this.form.invalid || fields.some((f) => this.error(f))) return;
 
     const change = this.changes(p);
@@ -203,7 +187,6 @@ export class ProfilePage implements OnInit {
     if (v.firstName.trim() !== p.firstName) change.firstName = v.firstName.trim();
     if (v.surname.trim() !== p.surname) change.surname = v.surname.trim();
     if (v.phone.trim() !== (p.phone ?? '')) change.phone = v.phone.trim();
-    if (v.dateOfBirth && v.dateOfBirth !== p.dateOfBirth) change.dateOfBirth = v.dateOfBirth;
     if (v.email.trim().toLowerCase() !== p.email.toLowerCase()) change.email = v.email.trim();
     if (v.password) change.password = v.password;
     if (change.email || change.password) change.currentPassword = v.currentPassword;
@@ -217,7 +200,6 @@ export class ProfilePage implements OnInit {
       surname: p.surname,
       email: p.email,
       phone: p.phone ?? '',
-      dateOfBirth: p.dateOfBirth ?? '',
       password: '',
       confirmPassword: '',
       currentPassword: '',
